@@ -494,7 +494,7 @@ async function triggerScanNow() {
   renderRunningEvent();
 }
 
-async function monitorManualScan(requestedAt) {
+async function monitorAutomationCycle(requestedAt, taskKey, phaseFallback) {
   const requested = new Date(requestedAt).getTime();
   const deadline = Date.now() + 30 * 60 * 1000;
 
@@ -504,36 +504,41 @@ async function monitorManualScan(requestedAt) {
     appInfo.automationEnabled = status.automationEnabled;
     appInfo.reconciliationIntervalSeconds = status.reconciliationIntervalSeconds;
 
-    const task = backgroundTasks.get('manual-scan');
+    const task = backgroundTasks.get(taskKey);
     if (task) {
       const total = automationInfo.currentTotal || 0;
       const processed = automationInfo.currentProcessed || 0;
       const percent = total ? Math.min(100, Math.round(processed / total * 100)) : 0;
       task.detail = automationInfo.cycleRunning
-        ? `${automationInfo.currentPhase || 'Scanning'} · ${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : 'starting…'}`
+        ? `${automationInfo.currentPhase || phaseFallback} · ${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : 'starting…'}`
         : 'Queued';
       renderBackgroundTasks();
     }
 
     const completed = new Date(automationInfo.lastCycleCompletedAt || 0).getTime();
     if (!automationInfo.cycleRunning && completed >= requested) {
-      manualScanResult = {
+      renderOverview();
+      return {
         completedAt: automationInfo.lastCycleCompletedAt,
         matched: automationInfo.lastMatched || 0,
         wouldMove: automationInfo.lastWouldMove || 0,
+        executed: automationInfo.lastExecuted || 0,
         errors: automationInfo.lastErrors || 0
       };
-      scanRequestedAt = null;
-      scanScheduleError = '';
-      renderOverview();
-      return;
     }
 
     renderOverview();
     await new Promise(resolve => setTimeout(resolve, 250));
   }
 
-  throw new Error('Timed out waiting for the scan to finish');
+  throw new Error('Timed out waiting for the cycle to finish');
+}
+
+async function monitorManualScan(requestedAt) {
+  manualScanResult = await monitorAutomationCycle(requestedAt, 'manual-scan', 'Scanning');
+  scanRequestedAt = null;
+  scanScheduleError = '';
+  renderOverview();
 }
 
 function renderStorage() {
@@ -864,6 +869,7 @@ function renderEvents() {
           ${routed ? `<div class="list-count">${formatNumber(routed)}</div><div class="list-meta" style="margin-bottom:10px">files routed</div>` : ''}
           <div class="card-actions">
             <button class="btn btn-sm btn-ghost" type="button" onclick="editEvent('${event.id}')">Edit</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="backfillEvent('${event.id}')" title="Scan the source shares and route media already captured in this event's window">Sort existing media</button>
             ${event.status === 'Active'
               ? `<button class="btn btn-sm" type="button" onclick="stopEvent('${event.id}')">Stop</button>`
               : (canStart ? `<button class="btn btn-sm" type="button" onclick="startEvent('${event.id}')">${startLabel}</button>` : '')}
@@ -1142,6 +1148,41 @@ window.startEvent = async function (id) {
 window.stopEvent = async function (id) {
   try {
     await request(`/api/v1/events/${id}/stop`, { method: 'POST' });
+    await reloadEvents();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.backfillEvent = async function (id) {
+  const event = events.find(x => x.id === id);
+  if (!event) return;
+
+  const range = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'still open'}`;
+  const mode = event.operationMode === 'Copy' ? 'copy' : 'safe-move';
+  if (!confirm(
+    `Sort existing media into “${event.name}”?\n\n` +
+    `MomentFerry will scan every source share of this event, read capture metadata for files it has ` +
+    `not indexed yet, and ${mode} everything captured in ${range}.\n\n` +
+    `Media matching other events is left alone. On a large share the metadata pass can take a while.`)) {
+    return;
+  }
+
+  const key = `backfill-${id}`;
+  try {
+    await runBackgroundTask(key, `Backfill: ${event.name}`, 'events', async () => {
+      const started = await request(`/api/v1/events/${id}/backfill`, { method: 'POST' });
+      const summary = await monitorAutomationCycle(started.requestedAt, key, 'Backfill');
+      const routed = appInfo.dryRun !== false
+        ? `${formatNumber(summary.wouldMove)} would be routed (Dry Run)`
+        : `${formatNumber(summary.executed)} routed`;
+      alert(
+        `Backfill finished for “${event.name}”.
+
+` +
+        `${formatNumber(summary.matched)} matched · ${routed}` +
+        (summary.errors ? ` · ${formatNumber(summary.errors)} errors` : ''));
+    });
     await reloadEvents();
   } catch (error) {
     alert(error.message);

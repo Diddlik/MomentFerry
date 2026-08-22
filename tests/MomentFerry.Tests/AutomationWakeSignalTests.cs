@@ -83,6 +83,38 @@ public sealed class AutomationWakeSignalTests
     }
 
     [Fact]
+    public async Task WakeForBackfill_CarriesEveryRequestedEvent()
+    {
+        var signal = new AutomationWakeSignal();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        signal.WakeForBackfill(first);
+        signal.WakeForBackfill(second);
+        signal.WakeForBackfill(first);
+
+        var request = await signal
+            .WaitAsync(TimeSpan.FromHours(1), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.False(request.FullReconcile);
+        Assert.Equal(new[] { first, second }.OrderBy(x => x), request.BackfillEventIds.OrderBy(x => x));
+    }
+
+    [Fact]
+    public async Task WakeForBackfill_IsDrainedAfterOnePass()
+    {
+        var signal = new AutomationWakeSignal();
+        signal.WakeForBackfill(Guid.NewGuid());
+
+        await signal.WaitAsync(TimeSpan.FromHours(1), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(1));
+        var second = await signal.WaitAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None);
+
+        Assert.False(second.HasWork);
+        Assert.Empty(second.BackfillEventIds);
+    }
+
+    [Fact]
     public async Task Wake_AndWakeForPath_AreBothReportedInOneBatch()
     {
         var signal = new AutomationWakeSignal();

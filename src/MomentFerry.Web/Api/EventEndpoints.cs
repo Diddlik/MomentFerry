@@ -59,6 +59,29 @@ public static class EventEndpoints
             return Results.Ok(mediaEvent);
         });
 
+        group.MapPost("/{id:guid}/backfill", async (
+            Guid id,
+            IMediaEventRepository repository,
+            IRuntimeSettingsStore settings,
+            AutomationStatus automationStatus,
+            AutomationWakeSignal wakeSignal,
+            IClock clock,
+            CancellationToken ct) =>
+        {
+            var mediaEvent = await repository.GetAsync(id, ct);
+            if (mediaEvent is null) return Results.NotFound();
+
+            var runtime = await settings.GetAsync(ct);
+            if (!runtime.AutomationEnabled)
+                return Results.Conflict(new { error = "Automation is disabled." });
+            if (automationStatus.Snapshot().CycleRunning)
+                return Results.Conflict(new { error = "An automation cycle is already running." });
+
+            var requestedAt = clock.UtcNow;
+            wakeSignal.WakeForBackfill(id);
+            return Results.Accepted(value: new { requestedAt, eventId = id, eventName = mediaEvent.Name });
+        });
+
         group.MapPost("/{id:guid}/start", async (
             Guid id,
             EventControlService control,

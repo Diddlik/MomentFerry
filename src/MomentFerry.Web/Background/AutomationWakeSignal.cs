@@ -8,11 +8,15 @@ namespace MomentFerry.Web.Background;
 /// </summary>
 public sealed record AutomationWakeRequest(
     bool FullReconcile,
-    IReadOnlyDictionary<Guid, IReadOnlyCollection<string>> TargetedPaths)
+    IReadOnlyDictionary<Guid, IReadOnlyCollection<string>> TargetedPaths,
+    IReadOnlyCollection<Guid> BackfillEventIds)
 {
-    public static readonly AutomationWakeRequest None = new(false, new Dictionary<Guid, IReadOnlyCollection<string>>());
+    public static readonly AutomationWakeRequest None = new(
+        false,
+        new Dictionary<Guid, IReadOnlyCollection<string>>(),
+        []);
 
-    public bool HasWork => FullReconcile || TargetedPaths.Count > 0;
+    public bool HasWork => FullReconcile || TargetedPaths.Count > 0 || BackfillEventIds.Count > 0;
 }
 
 public sealed class AutomationWakeSignal
@@ -32,6 +36,7 @@ public sealed class AutomationWakeSignal
 
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, HashSet<string>> _pendingPaths = [];
+    private readonly HashSet<Guid> _pendingBackfills = [];
     private bool _fullReconcileRequested;
 
     /// <summary>Requests a full share walk, used by the periodic sweep and by watcher failures.</summary>
@@ -40,6 +45,20 @@ public sealed class AutomationWakeSignal
         lock (_gate)
         {
             _fullReconcileRequested = true;
+        }
+
+        _channel.Writer.TryWrite(true);
+    }
+
+    /// <summary>
+    /// Requests a full pass over one event's source shares, routing everything that falls inside its
+    /// capture window. Used to apply an event defined after the media already arrived.
+    /// </summary>
+    public void WakeForBackfill(Guid eventId)
+    {
+        lock (_gate)
+        {
+            _pendingBackfills.Add(eventId);
         }
 
         _channel.Writer.TryWrite(true);
@@ -108,8 +127,12 @@ public sealed class AutomationWakeSignal
                 targeted[shareId] = paths.ToArray();
             }
 
-            var request = new AutomationWakeRequest(_fullReconcileRequested, targeted);
+            var request = new AutomationWakeRequest(
+                _fullReconcileRequested,
+                targeted,
+                _pendingBackfills.ToArray());
             _pendingPaths.Clear();
+            _pendingBackfills.Clear();
             _fullReconcileRequested = false;
             return request;
         }
