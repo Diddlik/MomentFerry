@@ -383,7 +383,24 @@ static IResult? Validate(ShareRequest request, IReadOnlyCollection<string> allow
     if (request.AllowedMediaTypes is null || request.AllowedMediaTypes.Length == 0)
         return Results.BadRequest(new { error = "At least one media type must be enabled." });
 
+    if (InvalidSubfolder(request.ImageSubfolder))
+        return Results.BadRequest(new { error = "ImageSubfolder must be a relative folder without '..' segments." });
+
+    if (InvalidSubfolder(request.VideoSubfolder))
+        return Results.BadRequest(new { error = "VideoSubfolder must be a relative folder without '..' segments." });
+
     return null;
+}
+
+static bool InvalidSubfolder(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+    if (Path.IsPathRooted(value)) return true;
+
+    return value
+        .Replace('\\', '/')
+        .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Any(segment => segment is ".." or ".");
 }
 
 static bool IsPathAllowed(string candidate, IEnumerable<string> roots)
@@ -415,7 +432,11 @@ static Share ToShare(Guid id, ShareRequest request) => new()
     Recursive = request.Recursive,
     DefaultTimeZone = string.IsNullOrWhiteSpace(request.DefaultTimeZone) ? null : request.DefaultTimeZone.Trim(),
     IgnorePatterns = request.IgnorePatterns?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToArray() ?? Array.Empty<string>(),
-    AllowedMediaTypes = request.AllowedMediaTypes!.ToHashSet()
+    AllowedMediaTypes = request.AllowedMediaTypes!.ToHashSet(),
+    ImageExtensions = MediaExtensionDefaults.Normalize(request.ImageExtensions),
+    VideoExtensions = MediaExtensionDefaults.Normalize(request.VideoExtensions),
+    ImageSubfolder = string.IsNullOrWhiteSpace(request.ImageSubfolder) ? null : request.ImageSubfolder.Trim(),
+    VideoSubfolder = string.IsNullOrWhiteSpace(request.VideoSubfolder) ? null : request.VideoSubfolder.Trim()
 };
 
 public sealed record ShareRequest(
@@ -430,4 +451,8 @@ public sealed record ShareRequest(
     bool Recursive = true,
     string? DefaultTimeZone = null,
     string[]? IgnorePatterns = null,
-    MediaType[]? AllowedMediaTypes = null);
+    MediaType[]? AllowedMediaTypes = null,
+    string[]? ImageExtensions = null,
+    string[]? VideoExtensions = null,
+    string? ImageSubfolder = null,
+    string? VideoSubfolder = null);

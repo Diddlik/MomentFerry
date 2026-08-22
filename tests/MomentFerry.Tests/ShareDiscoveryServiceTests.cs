@@ -112,6 +112,64 @@ public sealed class ShareDiscoveryServiceTests : IDisposable
         public DateTimeOffset UtcNow { get; set; } = now;
     }
 
+    [Fact]
+    public void Enumerate_UsesTheShareOwnExtensionListWhenSet()
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "keep.jpg"), "x");
+        File.WriteAllText(Path.Combine(root, "skip.png"), "x");
+        File.WriteAllText(Path.Combine(root, "clip.mkv"), "x");
+
+        var service = new ShareDiscoveryService(
+            new LocalFileSystemGateway(),
+            new FixedClock(DateTimeOffset.UnixEpoch));
+        var share = new Share
+        {
+            Name = "narrow",
+            Path = root,
+            Role = ShareRole.Source,
+            ImageExtensions = [".jpg"],
+            VideoExtensions = [".mkv"]
+        };
+
+        var names = service.Enumerate(share).Select(x => x.RelativePath).OrderBy(x => x).ToArray();
+        Assert.Equal(new[] { "clip.mkv", "keep.jpg" }, names);
+    }
+
+    [Fact]
+    public void Enumerate_FallsBackToBuiltInExtensionsWhenShareListIsEmpty()
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "photo.png"), "x");
+        File.WriteAllText(Path.Combine(root, "notes.txt"), "x");
+
+        var service = new ShareDiscoveryService(
+            new LocalFileSystemGateway(),
+            new FixedClock(DateTimeOffset.UnixEpoch));
+        var share = new Share { Name = "default", Path = root, Role = ShareRole.Source };
+
+        var file = Assert.Single(service.Enumerate(share));
+        Assert.Equal("photo.png", file.RelativePath);
+    }
+
+    [Theory]
+    [InlineData("jpg", ".jpg")]
+    [InlineData(".JPG", ".jpg")]
+    [InlineData("*.Mp4", ".mp4")]
+    [InlineData("  .heic  ", ".heic")]
+    public void NormalizeExtensions_AcceptsCommonUserInput(string input, string expected)
+    {
+        Assert.Equal([expected], MediaExtensionDefaults.Normalize([input]));
+    }
+
+    [Fact]
+    public void NormalizeExtensions_DropsBlanksAndDuplicates()
+    {
+        Assert.Equal(
+            [".jpg", ".png"],
+            MediaExtensionDefaults.Normalize([".jpg", "", "  ", "JPG", ".png", "."]));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(root)) Directory.Delete(root, recursive: true);

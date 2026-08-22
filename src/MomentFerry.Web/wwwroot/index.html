@@ -296,6 +296,25 @@
               </label>
             </div>
 
+            <div class="grid-2" id="sourceExtensionFields">
+              <label class="field">Photo file types (one per line)
+                <textarea id="imageExtensions" class="mono" rows="5" placeholder=".jpg"></textarea>
+              </label>
+              <label class="field">Video file types (one per line)
+                <textarea id="videoExtensions" class="mono" rows="5" placeholder=".mp4"></textarea>
+              </label>
+            </div>
+
+            <div class="grid-2" id="destinationSubfolderFields">
+              <label class="field">Photo subfolder (optional)
+                <input id="imageSubfolder" class="mono" placeholder="Photos" />
+              </label>
+              <label class="field">Video subfolder (optional)
+                <input id="videoSubfolder" class="mono" placeholder="Videos" />
+              </label>
+            </div>
+            <p class="card-sub" id="subfolderHint" style="margin:-6px 0 14px">Leave both empty to keep photos and videos together in the event folder.</p>
+
             <div class="folder-browser hidden" id="folderBrowser" aria-live="polite">
               <div class="folder-browser-heading">
                 <strong>Mounted folders</strong>

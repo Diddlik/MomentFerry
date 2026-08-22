@@ -128,6 +128,24 @@ public sealed class SqliteDatabaseMigrationTests : IAsyncLifetime
                     applied_at_utc TEXT NOT NULL
                 );
                 INSERT INTO schema_migrations VALUES (1, 'initial-schema', '2026-08-01T00:00:00Z');
+                -- Migration 1 creates every baseline table, so a real version 1 database has shares too.
+                CREATE TABLE shares (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    role INTEGER NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    owner TEXT NULL,
+                    group_name TEXT NULL,
+                    preset TEXT NULL,
+                    stability_seconds INTEGER NOT NULL,
+                    recursive INTEGER NOT NULL,
+                    default_timezone TEXT NULL,
+                    ignore_patterns_json TEXT NOT NULL,
+                    allowed_media_types_json TEXT NOT NULL,
+                    created_at_utc TEXT NOT NULL,
+                    updated_at_utc TEXT NOT NULL
+                );
                 CREATE TABLE media_files (
                     id TEXT PRIMARY KEY,
                     source_share_id TEXT NOT NULL,

@@ -20,8 +20,18 @@ public sealed class DestinationPathResolver
             .Replace("{source}", SafeSegment(sourceShare.Name), StringComparison.OrdinalIgnoreCase)
             .Replace("{owner}", SafeSegment(sourceShare.Owner ?? sourceShare.Name), StringComparison.OrdinalIgnoreCase);
 
+        // A destination may split media into subfolders below the event folder; unset keeps them together.
+        var subfolder = destinationShare.SubfolderFor(mediaFile.MediaType);
+        var mediaFolder = string.IsNullOrWhiteSpace(subfolder)
+            ? string.Empty
+            : string.Join(
+                Path.DirectorySeparatorChar,
+                subfolder.Replace('\\', '/')
+                    .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(SafeSegment));
+
         var root = Path.GetFullPath(destinationShare.Path);
-        var combined = Path.GetFullPath(Path.Combine(root, folder, mediaFile.OriginalName));
+        var combined = Path.GetFullPath(Path.Combine(root, folder, mediaFolder, mediaFile.OriginalName));
         EnsureInsideRoot(root, combined);
         return combined;
     }

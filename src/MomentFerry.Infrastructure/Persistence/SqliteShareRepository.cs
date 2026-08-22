@@ -11,7 +11,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
         var result = new List<Share>();
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json FROM shares ORDER BY name";
+        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder FROM shares ORDER BY name";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -24,7 +24,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
     {
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json FROM shares WHERE id = $id";
+        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder FROM shares WHERE id = $id";
         command.Parameters.AddWithValue("$id", id.ToString("D"));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
@@ -40,10 +40,13 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
                 id, name, path, role, enabled, owner, group_name, preset,
                 stability_seconds, recursive, default_timezone,
                 ignore_patterns_json, allowed_media_types_json,
+                image_extensions_json, video_extensions_json, image_subfolder, video_subfolder,
                 created_at_utc, updated_at_utc)
             VALUES (
                 $id, $name, $path, $role, $enabled, $owner, $group, $preset,
-                $stability, $recursive, $timezone, $ignore, $types, $created, $updated)
+                $stability, $recursive, $timezone, $ignore, $types,
+                $imageExtensions, $videoExtensions, $imageSubfolder, $videoSubfolder,
+                $created, $updated)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 path = excluded.path,
@@ -57,6 +60,10 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
                 default_timezone = excluded.default_timezone,
                 ignore_patterns_json = excluded.ignore_patterns_json,
                 allowed_media_types_json = excluded.allowed_media_types_json,
+                image_extensions_json = excluded.image_extensions_json,
+                video_extensions_json = excluded.video_extensions_json,
+                image_subfolder = excluded.image_subfolder,
+                video_subfolder = excluded.video_subfolder,
                 updated_at_utc = excluded.updated_at_utc;
             """;
         command.Parameters.AddWithValue("$id", share.Id.ToString("D"));
@@ -72,6 +79,10 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
         command.Parameters.AddWithValue("$timezone", (object?)share.DefaultTimeZone ?? DBNull.Value);
         command.Parameters.AddWithValue("$ignore", JsonSerializer.Serialize(share.IgnorePatterns));
         command.Parameters.AddWithValue("$types", JsonSerializer.Serialize(share.AllowedMediaTypes));
+        command.Parameters.AddWithValue("$imageExtensions", JsonSerializer.Serialize(share.ImageExtensions));
+        command.Parameters.AddWithValue("$videoExtensions", JsonSerializer.Serialize(share.VideoExtensions));
+        command.Parameters.AddWithValue("$imageSubfolder", (object?)share.ImageSubfolder ?? DBNull.Value);
+        command.Parameters.AddWithValue("$videoSubfolder", (object?)share.VideoSubfolder ?? DBNull.Value);
         command.Parameters.AddWithValue("$created", now);
         command.Parameters.AddWithValue("$updated", now);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -85,6 +96,12 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
         command.Parameters.AddWithValue("$id", id.ToString("D"));
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
+
+    /// <summary>Rows written before schema 3 have no extension lists and fall back to the built-in ones.</summary>
+    private static IReadOnlyList<string> ReadExtensions(Microsoft.Data.Sqlite.SqliteDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal)
+            ? []
+            : MediaExtensionDefaults.Normalize(JsonSerializer.Deserialize<string[]>(reader.GetString(ordinal)));
 
     private static Share Read(Microsoft.Data.Sqlite.SqliteDataReader reader)
     {
@@ -104,7 +121,11 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
             Recursive = reader.GetInt32(9) != 0,
             DefaultTimeZone = reader.IsDBNull(10) ? null : reader.GetString(10),
             IgnorePatterns = ignorePatterns,
-            AllowedMediaTypes = allowedTypes.ToHashSet()
+            AllowedMediaTypes = allowedTypes.ToHashSet(),
+            ImageExtensions = ReadExtensions(reader, 13),
+            VideoExtensions = ReadExtensions(reader, 14),
+            ImageSubfolder = reader.IsDBNull(15) ? null : reader.GetString(15),
+            VideoSubfolder = reader.IsDBNull(16) ? null : reader.GetString(16)
         };
     }
 }

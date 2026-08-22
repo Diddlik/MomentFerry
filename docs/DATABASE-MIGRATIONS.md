@@ -46,6 +46,12 @@ Version 2 adds nullable `media_files.source_last_write_at_utc`. Existing rows ar
 
 Back up `/app/data` before upgrading. Version 1.0.2 and older refuse to open the version 2 database, so rollback requires restoring the pre-upgrade data backup.
 
+## Schema version 3
+
+Version 3 adds four nullable `shares` columns: `image_extensions_json`, `video_extensions_json`, `image_subfolder` and `video_subfolder`. Existing rows keep NULL, which means "use the built-in extension lists" and "no media subfolder", so behavior is unchanged until a share is edited.
+
+Back up `/app/data` before upgrading. Version 1.2.0 and older refuse to open the version 3 database, so rollback requires restoring the pre-upgrade data backup.
+
 ## Adding a migration
 
 Never edit the SQL of an already released migration to change the meaning of its version. Add a new migration instead.

@@ -220,9 +220,22 @@ public sealed class MediaRoutingWorker(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var stableFiles = discovery.Enumerate(sourceShare)
-                    .Where(x => x.State == DiscoveryState.Stable)
-                    .ToArray();
+                var discovered = discovery.Enumerate(sourceShare).ToArray();
+                if (Array.Exists(discovered, x => x.State == DiscoveryState.WaitingStable))
+                {
+                    // A file seen for the first time cannot be judged settled yet: stability means its
+                    // size and last-write time stayed put across two observations. The periodic cycle
+                    // just skips those and revisits later, but a user-initiated backfill has nothing to
+                    // come back for, so it waits out the window and looks again. Deliberately not
+                    // short-circuited by comparing last-write time to the window: sync tools that
+                    // preserve the source timestamp can present an old mtime on a half-copied file.
+                    var settle = TimeSpan.FromSeconds(Math.Clamp(sourceShare.StabilitySeconds + 1, 2, 3601));
+                    status.Progress(sourceShare.Name, $"Backfill: waiting for files to settle", 0, discovered.Length);
+                    await Task.Delay(settle, cancellationToken);
+                    discovered = discovery.Enumerate(sourceShare).ToArray();
+                }
+
+                var stableFiles = Array.FindAll(discovered, x => x.State == DiscoveryState.Stable);
 
                 var processed = 0;
                 var batchSize = Math.Clamp(settings.MaxFilesPerSharePerCycle, 1, 2000);

@@ -9,17 +9,6 @@ public sealed class ShareDiscoveryService(IFileSystemGateway fileSystem, IClock 
 {
     private readonly ConcurrentDictionary<string, Observation> _observations = new(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".tif", ".tiff",
-        ".dng", ".arw", ".cr2", ".cr3", ".nef", ".raf"
-    };
-
-    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".3gp", ".webm", ".mts", ".m2ts"
-    };
-
     public IReadOnlyList<DiscoveredFile> Scan(Share share, int limit = 500)
         => Enumerate(share).Take(limit).ToList();
 
@@ -67,7 +56,7 @@ public sealed class ShareDiscoveryService(IFileSystemGateway fileSystem, IClock 
             return null;
         }
 
-        var mediaType = GetMediaType(path);
+        var mediaType = GetMediaType(share, path);
         if (mediaType == MediaType.Other || !share.AllowedMediaTypes.Contains(mediaType))
         {
             return null;
@@ -109,12 +98,23 @@ public sealed class ShareDiscoveryService(IFileSystemGateway fileSystem, IClock 
     private bool IsWatchable(Share share)
         => share.Enabled && share.Role != ShareRole.Destination && fileSystem.DirectoryExists(share.Path);
 
-    private static MediaType GetMediaType(string path)
+    private static MediaType GetMediaType(Share share, string path)
     {
         var extension = Path.GetExtension(path);
-        if (ImageExtensions.Contains(extension)) return MediaType.Image;
-        if (VideoExtensions.Contains(extension)) return MediaType.Video;
+        if (extension.Length == 0) return MediaType.Other;
+        if (Matches(share.EffectiveImageExtensions, extension)) return MediaType.Image;
+        if (Matches(share.EffectiveVideoExtensions, extension)) return MediaType.Video;
         return MediaType.Other;
+    }
+
+    private static bool Matches(IReadOnlyList<string> extensions, string extension)
+    {
+        for (var index = 0; index < extensions.Count; index++)
+        {
+            if (string.Equals(extensions[index], extension, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        return false;
     }
 
     private static bool IsIgnored(string relativePath, IReadOnlyList<string> patterns)

@@ -4,7 +4,7 @@ namespace MomentFerry.Infrastructure.Persistence;
 
 public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connectionFactory) : IDatabaseInitializer
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private static readonly IReadOnlyList<SqliteMigration> Migrations =
     [
@@ -115,6 +115,15 @@ public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connection
             "media-source-last-write",
             """
             ALTER TABLE media_files ADD COLUMN source_last_write_at_utc TEXT NULL;
+            """),
+        new SqliteMigration(
+            3,
+            "share-extensions-and-destination-subfolders",
+            """
+            ALTER TABLE shares ADD COLUMN image_extensions_json TEXT NULL;
+            ALTER TABLE shares ADD COLUMN video_extensions_json TEXT NULL;
+            ALTER TABLE shares ADD COLUMN image_subfolder TEXT NULL;
+            ALTER TABLE shares ADD COLUMN video_subfolder TEXT NULL;
             """)
     ];
 

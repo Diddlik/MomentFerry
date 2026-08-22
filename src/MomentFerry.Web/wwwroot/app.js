@@ -1081,6 +1081,11 @@ window.editShare = function (id) {
   $('recursive').checked = share.recursive;
   $('images').checked = (share.allowedMediaTypes || []).includes('Image');
   $('videos').checked = (share.allowedMediaTypes || []).includes('Video');
+  $('imageExtensions').value = ((share.imageExtensions || []).length ? share.imageExtensions : DEFAULT_IMAGE_EXTENSIONS).join('\n');
+  $('videoExtensions').value = ((share.videoExtensions || []).length ? share.videoExtensions : DEFAULT_VIDEO_EXTENSIONS).join('\n');
+  $('imageSubfolder').value = share.imageSubfolder || '';
+  $('videoSubfolder').value = share.videoSubfolder || '';
+  syncShareRoleFields();
   $('formTitle').textContent = `Edit ${share.name}`;
   openForm('shares', 'shareFormPanel');
 };
@@ -1177,9 +1182,7 @@ window.backfillEvent = async function (id) {
         ? `${formatNumber(summary.wouldMove)} would be routed (Dry Run)`
         : `${formatNumber(summary.executed)} routed`;
       alert(
-        `Backfill finished for “${event.name}”.
-
-` +
+        `Backfill finished for “${event.name}”.\n\n` +
         `${formatNumber(summary.matched)} matched · ${routed}` +
         (summary.errors ? ` · ${formatNumber(summary.errors)} errors` : ''));
     });
@@ -1369,6 +1372,29 @@ async function toggleFolder(button) {
   }
 }
 
+const DEFAULT_IMAGE_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.gif', '.tif', '.tiff',
+  '.dng', '.arw', '.cr2', '.cr3', '.nef', '.raf'
+];
+
+const DEFAULT_VIDEO_EXTENSIONS = [
+  '.mp4', '.mov', '.m4v', '.avi', '.mkv', '.3gp', '.webm', '.mts', '.m2ts'
+];
+
+// The share form serves every role; only show the fields the selected role actually uses.
+function syncShareRoleFields() {
+  const role = $('role').value;
+  const isSource = role === 'Source' || role === 'Both';
+  const isDestination = role === 'Destination' || role === 'Both';
+  $('sourceExtensionFields').classList.toggle('hidden', !isSource);
+  $('destinationSubfolderFields').classList.toggle('hidden', !isDestination);
+  $('subfolderHint').classList.toggle('hidden', !isDestination);
+}
+
+function linesToList(value) {
+  return value.split('\n').map(x => x.trim()).filter(Boolean);
+}
+
 function resetShareForm() {
   $('shareForm').reset();
   $('shareId').value = '';
@@ -1378,6 +1404,11 @@ function resetShareForm() {
   $('recursive').checked = true;
   $('images').checked = true;
   $('videos').checked = true;
+  $('imageExtensions').value = DEFAULT_IMAGE_EXTENSIONS.join('\n');
+  $('videoExtensions').value = DEFAULT_VIDEO_EXTENSIONS.join('\n');
+  $('imageSubfolder').value = '';
+  $('videoSubfolder').value = '';
+  syncShareRoleFields();
   $('formMessage').textContent = '';
   $('folderBrowser').classList.add('hidden');
   $('browseFolders').setAttribute('aria-expanded', 'false');
@@ -1496,6 +1527,7 @@ $('eventForm').addEventListener('submit', async (event) => {
 $('preset').addEventListener('change', applyPreset);
 $('role').addEventListener('change', () => {
   $('path').value = '';
+  syncShareRoleFields();
   if (!$('folderBrowser').classList.contains('hidden')) loadFolderTree();
 });
 $('browseFolders').addEventListener('click', async () => {

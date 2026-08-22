@@ -8,6 +8,8 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ### Added
 
+- source shares define which file extensions count as photos and videos, pre-filled with the built-in defaults so a device that only produces a subset can be narrowed without affecting other shares;
+- destination shares can route photos and videos into their own subfolders below the event folder; leaving both empty keeps everything together as before;
 - events can be applied retroactively: **Sort existing media** on an event runs a full pass over its source shares and routes everything captured inside the event window, including files that were never indexed. Use it to sort a past period, for example last month, into an event defined after the media arrived.
 
 ## [1.2.0] - 2026-08-22
