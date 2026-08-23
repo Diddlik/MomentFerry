@@ -11,10 +11,11 @@
   <!-- Fonts are optional: loaded non-blocking so an offline container still renders instantly. -->
   <link rel="stylesheet" media="print" onload="this.media='all'"
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+  <script src="/i18n.js"></script>
   <script>
     try {
-      var t = localStorage.getItem('momentferry.theme');
-      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      var theme = localStorage.getItem('momentferry.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
     } catch (e) {}
   </script>
 </head>
@@ -73,6 +74,10 @@
       </nav>
 
       <div class="side-foot">
+        <label class="side-row" for="languageSelect">
+          <span class="side-row-label">Language</span>
+          <select class="side-row-select" id="languageSelect" aria-label="Interface language"></select>
+        </label>
         <button class="side-row" type="button" id="themeToggle" aria-label="Switch appearance">
           <span class="side-row-label">Appearance</span>
           <span class="side-row-value" id="themeLabel">Dark</span>
@@ -594,7 +599,7 @@
       </div>
       <div class="modal-facts" id="liveModalFacts"></div>
       <label class="field" style="margin-bottom:18px">
-        Type <span class="mono" style="color:var(--txt)">ENABLE LIVE</span> to confirm
+        Type ENABLE LIVE to confirm
         <input id="liveModalToken" class="mono" placeholder="ENABLE LIVE" autocomplete="off" />
       </label>
       <div class="actions" style="justify-content:flex-end">

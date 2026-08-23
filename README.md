@@ -56,7 +56,7 @@ Real filesystem copies keep a **512 MiB free-space reserve in addition to the fi
 - .NET 10 / ASP.NET Core
 - SQLite persistence with transactional versioned schema migrations
 - downgrade guard when a database is newer than the running application
-- Web UI
+- Web UI in English, German, Russian, Polish, Italian, French and Ukrainian
 - source and destination Shares
 - Source Groups
 - capture-time Events with start/stop

@@ -26,18 +26,18 @@ let scanRequestedAt = null;
 let scanScheduleError = '';
 let manualScanResult = null;
 
-const TITLES = {
-  overview: ['Overview', 'Every watched folder, the running event and anything waiting on you.'],
-  events: ['Events', 'A capture-time window. Anything shot inside it lands in one folder.'],
-  shares: ['Shares', 'The folders MomentFerry can see. Your sync tool keeps them filled.'],
-  groups: ['Source groups', 'Which phones or cameras feed an event.'],
-  renaming: ['File naming', 'Templates that rename files on their way to the destination.'],
-  preview: ['Routing preview', 'See where every file would go before a single byte moves.'],
-  ops: ['Operations', 'Every copy, checksum, commit and deletion, in order.'],
-  settings: ['Automation & safety', 'How often MomentFerry looks, and what it is allowed to do.'],
-  updates: ['Image updates', 'Stable releases from GHCR, applied by an isolated companion.'],
-  setup: ['Finish setup', 'One last check before anything moves.']
-};
+const TITLES = () => ({
+  overview: [t('Overview'), t('Every watched folder, the running event and anything waiting on you.')],
+  events: [t('Events'), t('A capture-time window. Anything shot inside it lands in one folder.')],
+  shares: [t('Shares'), t('The folders MomentFerry can see. Your sync tool keeps them filled.')],
+  groups: [t('Source groups'), t('Which phones or cameras feed an event.')],
+  renaming: [t('File naming'), t('Templates that rename files on their way to the destination.')],
+  preview: [t('Routing preview'), t('See where every file would go before a single byte moves.')],
+  ops: [t('Operations'), t('Every copy, checksum, commit and deletion, in order.')],
+  settings: [t('Automation & safety'), t('How often MomentFerry looks, and what it is allowed to do.')],
+  updates: [t('Image updates'), t('Stable releases from GHCR, applied by an isolated companion.')],
+  setup: [t('Finish setup'), t('One last check before anything moves.')]
+});
 
 /* Helpers ------------------------------------------------------------- */
 
@@ -74,7 +74,7 @@ function destinationFolder(event) {
   const pad = (number, size) => String(number).padStart(size, '0');
   return String(event.destinationFolderTemplate ?? '')
     .replace(/\{event\.name\}/gi, () => safeSegment(event.name))
-    .replace(/\{event\.type\}/gi, () => safeSegment(event.type || 'Event'))
+    .replace(/\{event\.type\}/gi, () => safeSegment(event.type || t('Event')))
     .replace(/\{year\}/gi, valid ? pad(captured.getFullYear(), 4) : '{year}')
     .replace(/\{month\}/gi, valid ? pad(captured.getMonth() + 1, 2) : '{month}')
     .replace(/\{day\}/gi, valid ? pad(captured.getDate(), 2) : '{day}');
@@ -85,13 +85,13 @@ function destinationPathFor(event, destination) {
 }
 
 function formatDate(value) {
-  if (!value) return 'unknown';
+  if (!value) return t('unknown');
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString(MF_LANG);
 }
 
 function formatBytes(value) {
-  if (value == null || Number.isNaN(Number(value))) return 'unknown';
+  if (value == null || Number.isNaN(Number(value))) return t('unknown');
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
   let number = Number(value);
   let index = 0;
@@ -101,7 +101,7 @@ function formatBytes(value) {
 
 function formatNumber(value) {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString() : '0';
+  return Number.isFinite(number) ? number.toLocaleString(MF_LANG) : '0';
 }
 
 function toLocalInput(value) {
@@ -112,7 +112,7 @@ function toLocalInput(value) {
 
 function fromLocalInput(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error('Invalid date/time.');
+  if (Number.isNaN(date.getTime())) throw new Error(t('Invalid date/time.'));
   return date.toISOString();
 }
 
@@ -158,11 +158,11 @@ function renderBackgroundTasks() {
   if (!tasks.length) return;
 
   $('taskCenterSummary').textContent = running
-    ? `${running} running · you can change views`
-    : `${tasks.length} finished`;
+    ? t('{{count}} running · you can change views', { count: formatNumber(running) })
+    : t('{{count}} finished', { count: formatNumber(tasks.length) });
   $('clearFinishedTasks').classList.toggle('hidden', tasks.every(task => task.state === 'running'));
   $('backgroundTaskList').innerHTML = tasks.slice(0, 6).map(task => {
-    const state = task.state === 'running' ? 'Running' : task.state === 'success' ? 'Completed' : 'Failed';
+    const state = task.state === 'running' ? t('Running') : task.state === 'success' ? t('Completed') : t('Failed');
     const dot = task.state === 'running' ? 'dot-amb' : task.state === 'success' ? 'dot-acc' : 'dot-red';
     const content = `
       <span class="dot ${dot}"></span>
@@ -190,14 +190,14 @@ window.runBackgroundTask = function (key, label, view, action) {
   const existing = backgroundTasks.get(key);
   if (existing?.state === 'running') return existing.promise;
 
-  const task = { key, label, view, state: 'running', detail: 'Running', startedAt: Date.now() };
+  const task = { key, label, view, state: 'running', detail: t('Running'), startedAt: Date.now() };
   backgroundTasks.set(key, task);
   renderBackgroundTasks();
   updateTaskClock();
 
   task.promise = Promise.resolve().then(action).then(result => {
     task.state = 'success';
-    task.detail = 'Completed';
+    task.detail = t('Completed');
     task.finishedAt = Date.now();
     return result;
   }).catch(error => {
@@ -224,7 +224,7 @@ $('clearFinishedTasks').addEventListener('click', () => {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  $('themeLabel').textContent = theme === 'light' ? 'Light' : 'Dark';
+  $('themeLabel').textContent = theme === 'light' ? t('Light') : t('Dark');
   try { localStorage.setItem('momentferry.theme', theme); } catch {}
 }
 
@@ -235,7 +235,8 @@ $('themeToggle').addEventListener('click', () => {
 /* Navigation ---------------------------------------------------------- */
 
 function setView(view) {
-  if (!TITLES[view]) view = 'overview';
+  const titles = TITLES();
+  if (!titles[view]) view = 'overview';
   currentView = view;
 
   document.querySelectorAll('.view').forEach(section => {
@@ -246,7 +247,7 @@ function setView(view) {
     else button.removeAttribute('aria-current');
   });
 
-  const [title, subtitle] = TITLES[view];
+  const [title, subtitle] = titles[view];
   $('pageTitle').textContent = title;
   $('pageSubtitle').textContent = subtitle;
 
@@ -273,8 +274,8 @@ function renderMode() {
   chip.classList.toggle('is-dry', dry);
   chip.classList.toggle('is-live', !dry);
   dot.className = `dot ${dry ? 'dot-amb' : 'dot-acc'}`;
-  $('status').textContent = dry ? 'Dry Run — nothing is moved' : 'Live — files are moved for real';
-  $('modeAction').textContent = dry ? 'Go Live…' : 'Back to Dry Run';
+  $('status').textContent = dry ? t('Dry Run — nothing is moved') : t('Live — files are moved for real');
+  $('modeAction').textContent = dry ? t('Go Live…') : t('Back to Dry Run');
 }
 
 /* Data ---------------------------------------------------------------- */
@@ -300,7 +301,7 @@ async function load() {
     renderAll();
     await reloadRenaming();
   } catch (error) {
-    $('status').textContent = 'Offline';
+    $('status').textContent = t('Offline');
     $('pageSubtitle').textContent = error.message;
   }
 }
@@ -368,10 +369,10 @@ function automationBlock() {
   const progress = cycleRunning ? `
     <div class="event-progress">
       <div class="event-progress-head">
-        <span>${escapeHtml(automationInfo.currentPhase || 'Preparing')} · ${escapeHtml(automationInfo.currentShareName || 'sources')}</span>
-        <span>${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : 'starting…'}</span>
+        <span>${escapeHtml(t(automationInfo.currentPhase || 'Preparing'))} · ${escapeHtml(automationInfo.currentShareName || t('sources'))}</span>
+        <span>${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : t('starting…')}</span>
       </div>
-      <div class="progress-track" role="progressbar" aria-label="Current automation cycle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>
+      <div class="progress-track" role="progressbar" aria-label="${escapeHtml(t('Current automation cycle'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>
     </div>` : '';
   const scanDisabled = cycleRunning || scanRequestedAt || appInfo.automationEnabled === false;
 
@@ -380,34 +381,34 @@ function automationBlock() {
     <div class="stat-grid stat-grid-3">
       <div class="stat">
         <div class="stat-value">${formatNumber(matched)}</div>
-        <div class="stat-label">${cycleRunning ? 'matched so far' : 'matched last cycle'}</div>
+        <div class="stat-label">${t(cycleRunning ? 'matched so far' : 'matched last cycle')}</div>
       </div>
       <div class="stat">
         <div class="stat-value acc">${formatNumber(moved)}</div>
-        <div class="stat-label">${dry ? (cycleRunning ? 'would move so far' : 'would move') : 'moved last cycle'}</div>
+        <div class="stat-label">${t(dry ? (cycleRunning ? 'would move so far' : 'would move') : 'moved last cycle')}</div>
       </div>
       <button class="stat" type="button" data-view="ops">
         <div class="stat-value amb">${formatNumber(held)}</div>
-        <div class="stat-label">held</div>
+        <div class="stat-label">${t('held')}</div>
       </button>
     </div>
     <div class="event-scan-row">
       <div>
-        <div class="kicker">Automation</div>
+        <div class="kicker">${t('Automation')}</div>
         <div class="event-scan-time" id="nextScanCountdown"></div>
       </div>
       <button class="btn" type="button" data-scan-now ${scanDisabled ? 'disabled' : ''}>
-        ${cycleRunning ? 'Scanning…' : scanRequestedAt ? 'Queued…' : 'Scan now'}
+        ${t(cycleRunning ? 'Scanning…' : scanRequestedAt ? 'Queued…' : 'Scan now')}
       </button>
     </div>`;
 }
 
 function eventSummary(event) {
   return {
-    groupName: groups.find(x => x.id === event.sourceGroupId)?.name || 'unknown group',
+    groupName: groups.find(x => x.id === event.sourceGroupId)?.name || t('unknown group'),
     destination: shares.find(x => x.id === event.destinationShareId),
-    window: `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'open'}`,
-    mode: event.operationMode === 'Copy' ? 'Copy' : 'Safe Move'
+    window: `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : t('open')}`,
+    mode: event.operationMode === 'Copy' ? t('Copy') : t('Safe Move')
   };
 }
 
@@ -426,18 +427,18 @@ function eventRowList(list) {
             <span class="list-title">${escapeHtml(event.name)}</span>
             ${eventStatusPill(event.status)}
           </div>
-          <div class="list-meta">${escapeHtml(info.window)} · ${escapeHtml(info.groupName)} → ${escapeHtml(info.destination?.name || 'missing destination')} · ${info.mode}</div>
+          <div class="list-meta">${escapeHtml(info.window)} · ${escapeHtml(info.groupName)} → ${escapeHtml(info.destination?.name || t('missing destination'))} · ${info.mode}</div>
         </div>
         <div class="card-actions">
           <button class="btn btn-sm btn-ghost" type="button" data-event-toggle="${escapeHtml(event.id)}">
-            ${event.status === 'Active' ? 'Stop' : 'Start'}
+            ${t(event.status === 'Active' ? 'Stop' : 'Start')}
           </button>
         </div>
       </div>`;
   }).join('');
 
   const more = rest > 0
-    ? `<button class="btn btn-sm btn-ghost" type="button" data-view="events">Show ${formatNumber(rest)} more →</button>`
+    ? `<button class="btn btn-sm btn-ghost" type="button" data-view="events">${t('Show {{count}} more →', { count: formatNumber(rest) })}</button>`
     : '';
 
   return `<div class="stack" style="gap:8px;margin-bottom:14px">${rows}${more}</div>`;
@@ -448,7 +449,7 @@ function eventHeadline(event) {
   return `
     <div class="row" style="align-items:baseline;gap:10px;margin-bottom:3px">
       <div style="font-size:24px;font-weight:600;letter-spacing:-.02em">${escapeHtml(event.name)}</div>
-      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(event.type || 'Event')} · ${info.mode}</div>
+      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(event.type || t('Event'))} · ${info.mode}</div>
     </div>
     <div class="mono" style="font-size:12px;color:var(--mut);margin-bottom:14px">
       ${escapeHtml(info.window)} · ${escapeHtml(info.groupName)} → ${escapeHtml(destinationPathFor(event, info.destination))}
@@ -462,31 +463,31 @@ function renderRunningEvent() {
   const list = activeEvents();
 
   if (!list.length) {
-    kicker.textContent = 'Running event';
+    kicker.textContent = t('Running event');
     state.className = 'pill';
-    state.textContent = 'None';
+    state.textContent = t('None');
     body.innerHTML = `
       <div style="font-size:13px;color:var(--mut);line-height:1.6">
-        No event yet. An event is a capture-time window — everything shot inside it lands in one folder.
+        ${t('No event yet. An event is a capture-time window — everything shot inside it lands in one folder.')}
       </div>
       <div class="actions" style="margin-top:14px">
-        <button class="btn btn-acc" type="button" data-view="events">Create an event</button>
+        <button class="btn btn-acc" type="button" data-view="events">${t('Create an event')}</button>
       </div>`;
     return;
   }
 
   const multiple = list.length > 1;
   const collecting = list[0].status === 'Active';
-  kicker.textContent = multiple ? 'Running events' : 'Running event';
+  kicker.textContent = t(multiple ? 'Running events' : 'Running event');
   state.className = collecting ? 'pill pill-acc' : 'pill';
   state.textContent = multiple
-    ? `${formatNumber(list.length)} ${collecting ? 'active' : list[0].status.toLowerCase()}`
-    : (collecting ? 'Active' : list[0].status);
+    ? `${formatNumber(list.length)} ${collecting ? t('active') : t(list[0].status).toLowerCase()}`
+    : t(collecting ? 'Active' : list[0].status);
 
   const toggle = multiple
     ? ''
     : `<button class="btn btn-acc" type="button" data-event-toggle="${escapeHtml(list[0].id)}">
-         ${collecting ? 'Stop event' : 'Start event'}
+         ${t(collecting ? 'Stop event' : 'Start event')}
        </button>`;
 
   body.innerHTML = `
@@ -494,7 +495,7 @@ function renderRunningEvent() {
     ${automationBlock()}
     <div class="actions" style="margin-top:14px">
       ${toggle}
-      <button class="btn btn-ghost" type="button" data-view="preview">Preview routing</button>
+      <button class="btn btn-ghost" type="button" data-view="preview">${t('Preview routing')}</button>
     </div>`;
   renderNextScanCountdown();
 }
@@ -509,19 +510,19 @@ function renderNextScanCountdown() {
   }
   target.className = 'event-scan-time';
   if (automationInfo?.cycleRunning) {
-    target.textContent = 'Scan in progress';
+    target.textContent = t('Scan in progress');
     return;
   }
   if (scanRequestedAt) {
-    target.textContent = 'Manual scan queued';
+    target.textContent = t('Manual scan queued');
     return;
   }
   if (appInfo.automationEnabled === false) {
-    target.textContent = 'Automation is off';
+    target.textContent = t('Automation is off');
     return;
   }
   if (!automationInfo?.lastCycleCompletedAt) {
-    target.textContent = 'First scan pending';
+    target.textContent = t('First scan pending');
     return;
   }
 
@@ -529,17 +530,22 @@ function renderNextScanCountdown() {
     + Number(appInfo.reconciliationIntervalSeconds || 300) * 1000;
   const seconds = Math.max(0, Math.ceil((next - Date.now()) / 1000));
   const result = manualScanResult
-    ? `Manual scan completed ${new Date(manualScanResult.completedAt).toLocaleTimeString()} · ${formatNumber(manualScanResult.matched)} matched · ${formatNumber(manualScanResult.wouldMove)} would move${manualScanResult.errors ? ` · ${formatNumber(manualScanResult.errors)} errors` : ''} · `
+    ? t('Manual scan completed {{time}} · {{matched}} matched · {{wouldMove}} would move', {
+      time: new Date(manualScanResult.completedAt).toLocaleTimeString(MF_LANG),
+      matched: formatNumber(manualScanResult.matched),
+      wouldMove: formatNumber(manualScanResult.wouldMove)
+    }) + (manualScanResult.errors ? ` · ${t(manualScanResult.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(manualScanResult.errors) })}` : '') + ' · '
     : '';
   if (!seconds) {
-    target.textContent = `${result}Next scan due now`;
+    target.textContent = `${result}${t('Next scan due now')}`;
     return;
   }
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds % 3600 / 60);
   const remainder = seconds % 60;
-  target.textContent = `${result}Next scan in ${hours ? `${hours}:` : ''}${String(minutes).padStart(hours ? 2 : 1, '0')}:${String(remainder).padStart(2, '0')}`;
-  target.title = `Scheduled for ${new Date(next).toLocaleString()}`;
+  const clock = `${hours ? `${hours}:` : ''}${String(minutes).padStart(hours ? 2 : 1, '0')}:${String(remainder).padStart(2, '0')}`;
+  target.textContent = `${result}${t('Next scan in {{clock}}', { clock })}`;
+  target.title = t('Scheduled for {{time}}', { time: new Date(next).toLocaleString(MF_LANG) });
 }
 
 async function triggerScanNow() {
@@ -549,14 +555,14 @@ async function triggerScanNow() {
   scanRequestedAt = new Date().toISOString();
   renderRunningEvent();
   try {
-    await runBackgroundTask('manual-scan', 'Manual scan', 'overview', async () => {
+    await runBackgroundTask('manual-scan', t('Manual scan'), 'overview', async () => {
       const result = await request('/api/v1/automation/run', { method: 'POST' });
       scanRequestedAt = result.requestedAt;
       await monitorManualScan(result.requestedAt);
     });
   } catch (error) {
     scanRequestedAt = null;
-    scanScheduleError = `Could not start scan · ${error.message}`;
+    scanScheduleError = t('Could not start scan · {{error}}', { error: error.message });
   }
   renderRunningEvent();
 }
@@ -577,8 +583,8 @@ async function monitorAutomationCycle(requestedAt, taskKey, phaseFallback) {
       const processed = automationInfo.currentProcessed || 0;
       const percent = total ? Math.min(100, Math.round(processed / total * 100)) : 0;
       task.detail = automationInfo.cycleRunning
-        ? `${automationInfo.currentPhase || phaseFallback} · ${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : 'starting…'}`
-        : 'Queued';
+        ? `${t(automationInfo.currentPhase || phaseFallback)} · ${total ? `${formatNumber(processed)} / ${formatNumber(total)} · ${percent}%` : t('starting…')}`
+        : t('Queued');
       renderBackgroundTasks();
     }
 
@@ -598,11 +604,11 @@ async function monitorAutomationCycle(requestedAt, taskKey, phaseFallback) {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
 
-  throw new Error('Timed out waiting for the cycle to finish');
+  throw new Error(t('Timed out waiting for the cycle to finish'));
 }
 
 async function monitorManualScan(requestedAt) {
-  manualScanResult = await monitorAutomationCycle(requestedAt, 'manual-scan', 'Scanning');
+  manualScanResult = await monitorAutomationCycle(requestedAt, 'manual-scan', t('Scanning'));
   scanRequestedAt = null;
   scanScheduleError = '';
   renderOverview();
@@ -611,7 +617,7 @@ async function monitorManualScan(requestedAt) {
 function renderStorage() {
   const target = $('ovStorage');
   if (!storageInfo) {
-    target.innerHTML = '<div class="message">Loading storage…</div>';
+    target.innerHTML = `<div class="message">${t('Loading storage…')}</div>`;
     return;
   }
 
@@ -619,10 +625,10 @@ function renderStorage() {
   if (!items.length) {
     target.innerHTML = `
       <div style="font-size:13px;color:var(--mut);line-height:1.6">
-        No destination share configured yet, so there is nowhere for MomentFerry to put anything.
+        ${t('No destination share configured yet, so there is nowhere for MomentFerry to put anything.')}
       </div>
       <div class="actions" style="margin-top:14px">
-        <button class="btn btn-acc" type="button" data-view="shares">Add a destination</button>
+        <button class="btn btn-acc" type="button" data-view="shares">${t('Add a destination')}</button>
       </div>`;
     return;
   }
@@ -632,8 +638,8 @@ function renderStorage() {
 
   if (!primary.exists) {
     target.innerHTML = `
-      <div style="font-size:15px;font-weight:600;color:var(--red);margin-bottom:6px">Path missing</div>
-      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(primary.error || 'MomentFerry cannot see this folder inside the container.')}</div>
+      <div style="font-size:15px;font-weight:600;color:var(--red);margin-bottom:6px">${t('Path missing')}</div>
+      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(primary.error || t('MomentFerry cannot see this folder inside the container.'))}</div>
       <div class="mono" style="margin-top:auto;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim)">${escapeHtml(primary.path)}</div>`;
     return;
   }
@@ -651,20 +657,20 @@ function renderStorage() {
   target.innerHTML = `
     <div class="row" style="align-items:baseline;gap:7px">
       <span style="font-size:28px;font-weight:600;letter-spacing:-.02em">${escapeHtml(formatBytes(free))}</span>
-      <span style="font-size:14px;color:var(--mut)">free on ${escapeHtml(primary.name)}</span>
+      <span style="font-size:14px;color:var(--mut)">${t('free on {{name}}', { name: escapeHtml(primary.name) })}</span>
     </div>
-    <div class="meter" title="Usable free space versus the reserve MomentFerry holds back">
+    <div class="meter" title="${escapeHtml(t('Usable free space versus the reserve MomentFerry holds back'))}">
       <div class="meter-used" style="width:${(100 - reservePercent).toFixed(2)}%"></div>
       <div class="meter-reserve" style="width:${reservePercent.toFixed(2)}%"></div>
     </div>
     <div style="font-size:11.5px;color:var(--mut);line-height:1.5">
-      ${escapeHtml(formatBytes(reserve))} is always held back on top of each file.
+      ${t('{{size}} is always held back on top of each file.', { size: escapeHtml(formatBytes(reserve)) })}
       ${belowReserve
-        ? '<span style="color:var(--amb)">Free space is below that reserve — transfers will hold.</span>'
-        : 'There is room for the next transfers.'}
+        ? `<span style="color:var(--amb)">${t('Free space is below that reserve — transfers will hold.')}</span>`
+        : t('There is room for the next transfers.')}
     </div>
     ${others.length ? `<div style="font-size:11.5px;color:var(--mut);margin-top:10px">${others.map(x =>
-        `${escapeHtml(x.name)}: ${x.exists ? escapeHtml(formatBytes(x.availableFreeSpaceBytes)) + ' free' : 'path missing'}`
+        `${escapeHtml(x.name)}: ${x.exists ? t('{{size}} free', { size: escapeHtml(formatBytes(x.availableFreeSpaceBytes)) }) : t('path missing')}`
       ).join(' · ')}</div>` : ''}
     <div class="mono" style="margin-top:auto;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim)">${escapeHtml(primary.path)}</div>`;
 }
@@ -672,7 +678,7 @@ function renderStorage() {
 function renderSources() {
   const target = $('ovSources');
   if (!shares.length) {
-    target.innerHTML = '<div class="empty" style="grid-column:1/-1"><strong>No folders watched yet</strong>Add the folders your sync tool fills, plus one destination.</div>';
+    target.innerHTML = `<div class="empty" style="grid-column:1/-1"><strong>${t('No folders watched yet')}</strong>${t('Add the folders your sync tool fills, plus one destination.')}</div>`;
     return;
   }
 
@@ -681,9 +687,11 @@ function renderSources() {
     const storage = (storageInfo?.items || []).find(x => x.shareId === share.id);
     const detail = isDestination
       ? (storage
-        ? (storage.exists ? `${formatBytes(storage.availableFreeSpaceBytes)} free${storage.belowReserve ? ' · below reserve' : ''}` : 'path missing')
-        : 'destination')
-      : `${share.recursive ? 'subfolders' : 'top-level'} · ${share.stabilitySeconds}s stability`;
+        ? (storage.exists
+          ? t('{{size}} free', { size: formatBytes(storage.availableFreeSpaceBytes) }) + (storage.belowReserve ? ` · ${t('below reserve')}` : '')
+          : t('path missing'))
+        : t('destination'))
+      : `${t(share.recursive ? 'subfolders' : 'top-level')} · ${t('{{seconds}}s stability', { seconds: share.stabilitySeconds })}`;
     const healthy = share.enabled && (!storage || storage.exists);
 
     return `
@@ -691,11 +699,11 @@ function renderSources() {
         <div class="tile-head">
           <div class="tile-name">${escapeHtml(share.name)}</div>
           ${isDestination
-            ? '<span class="pill" style="font-size:10.5px;padding:2px 7px">Destination</span>'
+            ? `<span class="pill" style="font-size:10.5px;padding:2px 7px">${t('Destination')}</span>`
             : `<span class="dot dot-sm ${healthy ? 'dot-acc' : 'dot-amb'}"></span>`}
         </div>
         <div class="tile-path">${escapeHtml(share.path)}</div>
-        <div class="tile-status">${share.enabled ? escapeHtml(detail) : 'disabled'}</div>
+        <div class="tile-status">${share.enabled ? escapeHtml(detail) : t('disabled')}</div>
       </div>`;
   }).join('');
 }
@@ -703,23 +711,35 @@ function renderSources() {
 function renderRecentOps() {
   const target = $('ovRecentOps');
   if (!operations.length) {
-    target.innerHTML = '<div style="font-size:12.5px;color:var(--mut)">Nothing has run yet.</div>';
+    target.innerHTML = `<div style="font-size:12.5px;color:var(--mut)">${t('Nothing has run yet.')}</div>`;
     return;
   }
   target.innerHTML = operations.slice(0, 5).map(operation => `
     <div class="ledger-row">
       <span title="${escapeHtml(operation.sourcePath)}">${escapeHtml(baseName(operation.sourcePath))}</span>
-      <span>${escapeHtml(operation.state)}</span>
+      <span>${escapeHtml(t(operation.state))}</span>
     </div>`).join('');
 }
 
 /* Onboarding + setup wizard -------------------------------------------- */
 
 const SETUP_STEPS = () => [
-  { label: 'Safety reviewed', done: true, view: 'settings' },
-  { label: shares.length ? `${shares.length} share${shares.length === 1 ? '' : 's'} added` : 'Add folders', done: shares.length > 0, view: 'shares' },
-  { label: groups.length ? `${groups.length} group${groups.length === 1 ? '' : 's'}` : 'Group the phones', done: groups.length > 0, view: 'groups' },
-  { label: appInfo.dryRun === false ? 'Live mode enabled' : 'Verify, then go Live →', done: appInfo.dryRun === false, view: 'setup' }
+  { label: t('Safety reviewed'), done: true, view: 'settings' },
+  {
+    label: shares.length
+      ? t(shares.length === 1 ? '{{count}} share added' : '{{count}} shares added', { count: formatNumber(shares.length) })
+      : t('Add folders'),
+    done: shares.length > 0,
+    view: 'shares'
+  },
+  {
+    label: groups.length
+      ? t(groups.length === 1 ? '{{count}} group' : '{{count}} groups', { count: formatNumber(groups.length) })
+      : t('Group the phones'),
+    done: groups.length > 0,
+    view: 'groups'
+  },
+  { label: t(appInfo.dryRun === false ? 'Live mode enabled' : 'Verify, then go Live →'), done: appInfo.dryRun === false, view: 'setup' }
 ];
 
 function renderOnboarding() {
@@ -731,22 +751,23 @@ function renderOnboarding() {
   panel.classList.toggle('hidden', remaining === 0 || dismissed);
   if (remaining === 0 || dismissed) return;
 
-  $('onboardingSummary').textContent =
-    `${steps.length - remaining} of ${steps.length} steps done. MomentFerry stays in Dry Run until you say otherwise.`;
+  $('onboardingSummary').textContent = t(
+    '{{done}} of {{total}} steps done. MomentFerry stays in Dry Run until you say otherwise.',
+    { done: steps.length - remaining, total: steps.length });
 
   $('onboardingSteps').innerHTML = steps.map((step, index) => `
     <button class="guide-step ${step.done ? '' : 'is-todo'}" type="button" data-view="${step.view}">
-      <div class="guide-state">${step.done ? 'Done' : `Step ${index + 1}`}</div>
+      <div class="guide-state">${step.done ? t('Done') : t('Step {{number}}', { number: index + 1 })}</div>
       <div class="guide-label"${step.done ? '' : ' style="font-weight:500"'}>${escapeHtml(step.label)}</div>
     </button>`).join('');
 }
 
 function renderSetup() {
   const steps = [
-    { label: 'Review safety', done: true },
-    { label: 'Add folders', done: shares.length > 0 },
-    { label: 'Group the phones', done: groups.length > 0 },
-    { label: 'Verify and go Live', done: appInfo.dryRun === false }
+    { label: t('Review safety'), done: true },
+    { label: t('Add folders'), done: shares.length > 0 },
+    { label: t('Group the phones'), done: groups.length > 0 },
+    { label: t('Verify and go Live'), done: appInfo.dryRun === false }
   ];
   const currentIndex = steps.findIndex(x => !x.done);
 
@@ -763,24 +784,27 @@ function renderSetup() {
   const sampleEvent = activeEvent();
   const checks = [
     {
-      name: 'Capture times look right',
-      detail: 'Run a routing preview on a source share to confirm the capture times MomentFerry reads.',
+      name: t('Capture times look right'),
+      detail: t('Run a routing preview on a source share to confirm the capture times MomentFerry reads.'),
       ok: operations.length > 0 || events.length > 0,
       mono: false
     },
     {
-      name: 'Destination path looks right',
+      name: t('Destination path looks right'),
       detail: sampleEvent && destination
         ? destinationPathFor(sampleEvent, destination)
-        : 'No event and destination pair configured yet.',
+        : t('No event and destination pair configured yet.'),
       ok: Boolean(sampleEvent && destination),
       mono: true
     },
     {
-      name: 'There is room',
+      name: t('There is room'),
       detail: destination && destination.exists && destination.availableFreeSpaceBytes != null
-        ? `${formatBytes(destination.availableFreeSpaceBytes)} free · ${formatBytes(storageInfo.minimumFreeSpaceReserveBytes)} reserve untouched`
-        : 'Destination free space is unknown.',
+        ? t('{{free}} free · {{reserve}} reserve untouched', {
+          free: formatBytes(destination.availableFreeSpaceBytes),
+          reserve: formatBytes(storageInfo.minimumFreeSpaceReserveBytes)
+        })
+        : t('Destination free space is unknown.'),
       ok: Boolean(destination && destination.exists && !destination.belowReserve),
       mono: false
     }
@@ -792,7 +816,7 @@ function renderSetup() {
         <div class="setting-name">${escapeHtml(check.name)}</div>
         <div class="setting-desc${check.mono ? ' mono' : ''}">${escapeHtml(check.detail)}</div>
       </div>
-      <span class="pill ${check.ok ? 'pill-acc' : 'pill-amb'}">${check.ok ? 'Checked' : 'Review'}</span>
+      <span class="pill ${check.ok ? 'pill-acc' : 'pill-amb'}">${t(check.ok ? 'Checked' : 'Review')}</span>
     </div>`).join('');
 
   $('setupEnableLive').classList.toggle('hidden', appInfo.dryRun === false);
@@ -801,7 +825,7 @@ function renderSetup() {
 /* Shares --------------------------------------------------------------- */
 
 function renderPresets() {
-  $('preset').innerHTML = '<option value="">Plain folder / custom</option>' + presets
+  $('preset').innerHTML = `<option value="">${t('Plain folder / custom')}</option>` + presets
     .map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.displayName)}</option>`)
     .join('');
 }
@@ -809,7 +833,7 @@ function renderPresets() {
 function renderShares() {
   const list = $('shareList');
   if (!shares.length) {
-    list.innerHTML = '<div class="empty"><strong>No shares yet</strong>Add the folders your sync tool fills, plus one destination folder.</div>';
+    list.innerHTML = `<div class="empty"><strong>${t('No shares yet')}</strong>${t('Add the folders your sync tool fills, plus one destination folder.')}</div>`;
     return;
   }
 
@@ -818,25 +842,25 @@ function renderShares() {
       <div class="list-main">
         <div class="list-heading">
           <span class="list-title">${escapeHtml(share.name)}</span>
-          <span class="pill">${escapeHtml(share.role)}</span>
+          <span class="pill">${escapeHtml(t(share.role))}</span>
           ${share.preset ? `<span style="font-size:11px;color:var(--dim)">${escapeHtml(share.preset)}</span>` : ''}
-          ${share.enabled ? '' : '<span class="pill pill-amb">Disabled</span>'}
+          ${share.enabled ? '' : `<span class="pill pill-amb">${t('Disabled')}</span>`}
         </div>
         <div class="list-path">${escapeHtml(share.path)}</div>
         <div class="list-meta">
           ${share.owner ? `${escapeHtml(share.owner)} · ` : ''}
-          ${(share.allowedMediaTypes || []).join(' and ') || 'no media types'} ·
-          ${share.recursive ? 'subfolders' : 'top-level'} ·
-          ${share.stabilitySeconds}s stability
+          ${(share.allowedMediaTypes || []).map(type => t(type)).join(` ${t('and')} `) || t('no media types')} ·
+          ${t(share.recursive ? 'subfolders' : 'top-level')} ·
+          ${t('{{seconds}}s stability', { seconds: share.stabilitySeconds })}
         </div>
         <div class="list-meta" id="state-${escapeHtml(share.id)}"></div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-sm btn-ghost" type="button" onclick="probeShare('${share.id}')">Test</button>
-        ${share.role !== 'Destination' ? `<button class="btn btn-sm btn-ghost" type="button" onclick="scanShare('${share.id}')">Scan</button>` : ''}
-        ${share.role !== 'Destination' ? `<button class="btn btn-sm btn-ghost" type="button" onclick="metadataPreview('${share.id}')">Metadata</button>` : ''}
-        <button class="btn btn-sm" type="button" onclick="editShare('${share.id}')">Edit</button>
-        <button class="btn btn-sm btn-danger" type="button" onclick="deleteShare('${share.id}')">Remove</button>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="probeShare('${share.id}')">${t('Test')}</button>
+        ${share.role !== 'Destination' ? `<button class="btn btn-sm btn-ghost" type="button" onclick="scanShare('${share.id}')">${t('Scan')}</button>` : ''}
+        ${share.role !== 'Destination' ? `<button class="btn btn-sm btn-ghost" type="button" onclick="metadataPreview('${share.id}')">${t('Metadata')}</button>` : ''}
+        <button class="btn btn-sm" type="button" onclick="editShare('${share.id}')">${t('Edit')}</button>
+        <button class="btn btn-sm btn-danger" type="button" onclick="deleteShare('${share.id}')">${t('Remove')}</button>
       </div>
     </article>`).join('');
 }
@@ -849,13 +873,13 @@ function renderGroupChoices(selected = []) {
     ? sourceShares.map(share => `
         <label><input type="checkbox" name="groupShare" value="${share.id}" ${selected.includes(share.id) ? 'checked' : ''} />${escapeHtml(share.name)}</label>
       `).join('')
-    : '<span class="subtle">Create at least one source share first.</span>';
+    : `<span class="subtle">${t('Create at least one source share first.')}</span>`;
 }
 
 function renderGroups() {
   const list = $('groupList');
   if (!groups.length) {
-    list.innerHTML = '<div class="empty"><strong>No source groups yet</strong>A group is just a set of phones or cameras that feed one event. Make one per family, per project, or per trip.</div>';
+    list.innerHTML = `<div class="empty"><strong>${t('No source groups yet')}</strong>${t('A group is just a set of phones or cameras that feed one event. Make one per family, per project, or per trip.')}</div>`;
     return;
   }
 
@@ -867,11 +891,11 @@ function renderGroups() {
         <div class="card-head" style="align-items:flex-start;margin-bottom:14px">
           <div>
             <div class="list-title list-title-lg" style="margin-bottom:4px">${escapeHtml(group.name)}</div>
-            <div class="card-sub">Used by ${usedBy} event${usedBy === 1 ? '' : 's'} · ${members.length} source share${members.length === 1 ? '' : 's'}</div>
+            <div class="card-sub">${t('Events using it: {{events}} · Source shares: {{shares}}', { events: usedBy, shares: members.length })}</div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-sm btn-ghost" type="button" onclick="editGroup('${group.id}')">Edit</button>
-            <button class="btn btn-sm btn-danger" type="button" onclick="deleteGroup('${group.id}')">Remove</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="editGroup('${group.id}')">${t('Edit')}</button>
+            <button class="btn btn-sm btn-danger" type="button" onclick="deleteGroup('${group.id}')">${t('Remove')}</button>
           </div>
         </div>
         <div class="grid-3" style="gap:10px">
@@ -881,7 +905,7 @@ function renderGroups() {
                   <div class="tile-name" style="margin-bottom:3px">${escapeHtml(share.name)}</div>
                   <div class="tile-path" style="margin-bottom:0">${escapeHtml(share.path)}</div>
                 </div>`).join('')
-            : '<div class="list-meta">No shares in this group yet.</div>'}
+            : `<div class="list-meta">${t('No shares in this group yet.')}</div>`}
         </div>
       </article>`;
   }).join('');
@@ -892,35 +916,35 @@ function renderGroups() {
 function renderEventSelectors() {
   $('eventSourceGroup').innerHTML = groups.length
     ? groups.map(group => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join('')
-    : '<option value="">Create a source group first</option>';
+    : `<option value="">${t('Create a source group first')}</option>`;
 
   const destinations = shares.filter(x => x.enabled && x.role !== 'Source');
   $('eventDestination').innerHTML = destinations.length
     ? destinations.map(share => `<option value="${share.id}">${escapeHtml(share.name)} · ${escapeHtml(share.path)}</option>`).join('')
-    : '<option value="">Create a destination share first</option>';
+    : `<option value="">${t('Create a destination share first')}</option>`;
 }
 
 function eventStatusPill(status) {
-  if (status === 'Active') return '<span class="pill pill-acc">Collecting</span>';
-  if (status === 'Planned') return '<span class="pill pill-amb">Planned</span>';
-  return `<span class="pill">${escapeHtml(status)}</span>`;
+  if (status === 'Active') return `<span class="pill pill-acc">${t('Collecting')}</span>`;
+  if (status === 'Planned') return `<span class="pill pill-amb">${t('Planned')}</span>`;
+  return `<span class="pill">${escapeHtml(t(status))}</span>`;
 }
 
 function renderEvents() {
   const list = $('eventList');
   if (!events.length) {
-    list.innerHTML = '<div class="empty"><strong>No events yet</strong>An event is a capture-time window. Anything shot inside it lands in one folder.</div>';
+    list.innerHTML = `<div class="empty"><strong>${t('No events yet')}</strong>${t('An event is a capture-time window. Anything shot inside it lands in one folder.')}</div>`;
     return;
   }
 
   list.innerHTML = events.map(event => {
     const groupName = groups.find(x => x.id === event.sourceGroupId)?.name || event.sourceGroupId;
     const destination = shares.find(x => x.id === event.destinationShareId);
-    const mode = event.operationMode === 'Copy' ? 'Copy' : 'Safe Move';
-    const range = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'still open'}`;
+    const mode = event.operationMode === 'Copy' ? t('Copy') : t('Safe Move');
+    const range = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : t('still open')}`;
     const routed = operations.filter(o => o.eventId === event.id).length;
     const canStart = event.status !== 'Archived' && event.status !== 'Cancelled';
-    const startLabel = event.status === 'Closed' ? 'Reopen' : 'Start';
+    const startLabel = t(event.status === 'Closed' ? 'Reopen' : 'Start');
 
     return `
       <article class="list-row">
@@ -933,14 +957,14 @@ function renderEvents() {
           <div class="list-path">${escapeHtml(destinationPathFor(event, destination))}</div>
         </div>
         <div class="list-side">
-          ${routed ? `<div class="list-count">${formatNumber(routed)}</div><div class="list-meta" style="margin-bottom:10px">files routed</div>` : ''}
+          ${routed ? `<div class="list-count">${formatNumber(routed)}</div><div class="list-meta" style="margin-bottom:10px">${t('files routed')}</div>` : ''}
           <div class="card-actions">
-            <button class="btn btn-sm btn-ghost" type="button" onclick="editEvent('${event.id}')">Edit</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick="backfillEvent('${event.id}')" title="Scan the source shares and route media already captured in this event's window">Sort existing media</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="editEvent('${event.id}')">${t('Edit')}</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="backfillEvent('${event.id}')" title="${escapeHtml(t("Scan the source shares and route media already captured in this event's window"))}">${t('Sort existing media')}</button>
             ${event.status === 'Active'
-              ? `<button class="btn btn-sm" type="button" onclick="stopEvent('${event.id}')">Stop</button>`
+              ? `<button class="btn btn-sm" type="button" onclick="stopEvent('${event.id}')">${t('Stop')}</button>`
               : (canStart ? `<button class="btn btn-sm" type="button" onclick="startEvent('${event.id}')">${startLabel}</button>` : '')}
-            <button class="btn btn-sm btn-danger" type="button" onclick="deleteEvent('${event.id}')">Remove</button>
+            <button class="btn btn-sm btn-danger" type="button" onclick="deleteEvent('${event.id}')">${t('Remove')}</button>
           </div>
         </div>
       </article>`;
@@ -952,21 +976,23 @@ function renderEvents() {
 function renderOperations() {
   const target = $('operationList');
   const header = `
-    <div class="th">File</div>
-    <div class="th">From</div>
-    <div class="th">Stage</div>
-    <div class="th right">State</div>`;
+    <div class="th">${t('File')}</div>
+    <div class="th">${t('From')}</div>
+    <div class="th">${t('Stage')}</div>
+    <div class="th right">${t('State')}</div>`;
 
   const rows = operations.map(operation => {
     const share = shareForPath(operation.sourcePath);
     const stage = operation.lastError
       ? operation.lastError
-      : (operation.destinationPath ? `→ ${operation.destinationPath}` : `started ${formatDate(operation.startedAt)}`);
+      : (operation.destinationPath
+        ? `→ ${operation.destinationPath}`
+        : t('started {{time}}', { time: formatDate(operation.startedAt) }));
     return `
       <div class="td strong" title="${escapeHtml(operation.sourcePath)}">${escapeHtml(baseName(operation.sourcePath))}</div>
       <div class="td">${escapeHtml(share ? share.name : '—')}</div>
       <div class="td">${escapeHtml(stage)}</div>
-      <div class="td right">${escapeHtml(operation.state)}</div>`;
+      <div class="td right">${escapeHtml(t(operation.state))}</div>`;
   }).join('');
 
   target.innerHTML = `
@@ -974,7 +1000,7 @@ function renderOperations() {
       <div class="table-scroll">
         <div class="table table-ops">${header}${rows}</div>
       </div>
-      ${operations.length ? '' : '<div class="table-empty">No operations recorded yet.</div>'}
+      ${operations.length ? '' : `<div class="table-empty">${t('No operations recorded yet.')}</div>`}
     </div>`;
 }
 
@@ -983,11 +1009,11 @@ function renderOperations() {
 function renderQuarantine() {
   const list = $('quarantineList');
   $('quarantineCount').textContent = quarantinedOperations.length
-    ? `${quarantinedOperations.length} item${quarantinedOperations.length === 1 ? '' : 's'}`
+    ? t(quarantinedOperations.length === 1 ? '{{count}} item' : '{{count}} items', { count: formatNumber(quarantinedOperations.length) })
     : '';
 
   if (!quarantinedOperations.length) {
-    list.innerHTML = '<div class="divided-row" style="display:block;font-size:12.5px;color:var(--mut)">Nothing is waiting. Every file so far routed cleanly.</div>';
+    list.innerHTML = `<div class="divided-row" style="display:block;font-size:12.5px;color:var(--mut)">${t('Nothing is waiting. Every file so far routed cleanly.')}</div>`;
     return;
   }
 
@@ -995,11 +1021,11 @@ function renderQuarantine() {
     <div class="divided-row">
       <div style="min-width:0">
         <div class="mono" style="font-size:12px;color:var(--txt)" title="${escapeHtml(operation.sourcePath)}">${escapeHtml(baseName(operation.sourcePath))}</div>
-        <div style="font-size:11.5px;color:var(--mut);margin-top:2px">${escapeHtml(operation.lastError || 'No reason recorded.')}</div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:2px">${escapeHtml(operation.lastError || t('No reason recorded.'))}</div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-sm btn-ghost" type="button" ${appInfo.dryRun ? 'disabled title="Dry Run is enabled"' : ''} onclick="retryQuarantine('${operation.id}')">Retry</button>
-        <button class="btn btn-sm btn-ghost" type="button" onclick="dismissQuarantine('${operation.id}')">Dismiss safely</button>
+        <button class="btn btn-sm btn-ghost" type="button" ${appInfo.dryRun ? `disabled title="${escapeHtml(t('Dry Run is enabled'))}"` : ''} onclick="retryQuarantine('${operation.id}')">${t('Retry')}</button>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="dismissQuarantine('${operation.id}')">${t('Dismiss safely')}</button>
       </div>
     </div>`).join('');
 }
@@ -1010,7 +1036,7 @@ function renderRoutingSources() {
   const sourceShares = shares.filter(x => x.enabled && x.role !== 'Destination');
   $('routingSource').innerHTML = sourceShares.length
     ? sourceShares.map(share => `<option value="${share.id}">${escapeHtml(share.name)} · ${escapeHtml(share.path)}</option>`).join('')
-    : '<option value="">No source shares</option>';
+    : `<option value="">${t('No source shares')}</option>`;
 }
 
 async function previewRouting() {
@@ -1018,12 +1044,12 @@ async function previewRouting() {
   if (!id) return;
   const share = shares.find(item => item.id === id);
   $('routingSummary').textContent = '';
-  $('routingList').innerHTML = '<div class="empty">Scanning stable files and evaluating events…</div>';
+  $('routingList').innerHTML = `<div class="empty">${t('Scanning stable files and evaluating events…')}</div>`;
 
   try {
     const result = await runBackgroundTask(
       `routing-preview:${id}`,
-      `Routing preview · ${share?.name || 'source'}`,
+      `${t('Routing preview')} · ${share?.name || t('source')}`,
       'preview',
       () => request(`/api/v1/shares/${id}/routing-preview?limit=2000`));
     const dry = appInfo.dryRun !== false;
@@ -1033,40 +1059,40 @@ async function previewRouting() {
       const canExecute = item.state === 'Matched' && event && !dry;
       const destination = item.destinationPath
         ? escapeHtml(item.destinationPath)
-        : (item.message ? escapeHtml(item.message) : 'stays where it is');
+        : (item.message ? escapeHtml(item.message) : t('stays where it is'));
       return `
         <div class="td strong" title="${escapeHtml(item.mediaFile.originalName)}">${escapeHtml(item.mediaFile.originalName)}</div>
         <div class="td">${escapeHtml(formatDate(item.mediaFile.capturedAt))}</div>
-        <div class="td">${escapeHtml(event ? event.name : item.state)}</div>
+        <div class="td">${escapeHtml(event ? event.name : t(item.state))}</div>
         <div class="td mono">
           ${destination}
-          ${canExecute ? `<div style="margin-top:6px"><button class="btn btn-sm" type="button" onclick="executeTransfer('${item.mediaFile.id}','${event.id}')">Execute</button></div>` : ''}
+          ${canExecute ? `<div style="margin-top:6px"><button class="btn btn-sm" type="button" onclick="executeTransfer('${item.mediaFile.id}','${event.id}')">${t('Execute')}</button></div>` : ''}
         </div>`;
     }).join('');
 
     $('routingList').innerHTML = `
       <div class="card card-flush">
         <div class="table-summary">
-          <span><b>${formatNumber(result.total)}</b> scanned</span>
-          <span><b class="acc">${formatNumber(result.matched)}</b> matched an event</span>
-          <span><b>${formatNumber(result.unmatched)}</b> outside any event</span>
-          <span><b class="amb">${formatNumber(result.ambiguous)}</b> need a decision</span>
+          <span><b>${formatNumber(result.total)}</b> ${t('scanned')}</span>
+          <span><b class="acc">${formatNumber(result.matched)}</b> ${t('matched an event')}</span>
+          <span><b>${formatNumber(result.unmatched)}</b> ${t('outside any event')}</span>
+          <span><b class="amb">${formatNumber(result.ambiguous)}</b> ${t('need a decision')}</span>
         </div>
         <div class="table-scroll">
           <div class="table table-preview">
-            <div class="th">File</div>
-            <div class="th">Captured</div>
-            <div class="th">Match</div>
-            <div class="th">Destination</div>
+            <div class="th">${t('File')}</div>
+            <div class="th">${t('Captured')}</div>
+            <div class="th">${t('Match')}</div>
+            <div class="th">${t('Destination')}</div>
             ${rows}
           </div>
         </div>
-        ${result.items.length ? '' : '<div class="table-empty">No stable media files found yet. Scan again after the stability interval.</div>'}
+        ${result.items.length ? '' : `<div class="table-empty">${t('No stable media files found yet. Scan again after the stability interval.')}</div>`}
       </div>`;
 
-    $('routingSummary').textContent = dry ? 'Dry Run: nothing here can be moved or deleted.' : '';
+    $('routingSummary').textContent = dry ? t('Dry Run: nothing here can be moved or deleted.') : '';
   } catch (error) {
-    $('routingList').innerHTML = '<div class="empty"><strong>Preview failed</strong>See the message below.</div>';
+    $('routingList').innerHTML = `<div class="empty"><strong>${t('Preview failed')}</strong>${t('See the message below.')}</div>`;
     $('routingSummary').textContent = error.message;
     $('routingSummary').className = 'message error';
   }
@@ -1077,58 +1103,63 @@ async function previewRouting() {
 window.probeShare = async function (id) {
   const state = $(`state-${id}`);
   const share = shares.find(item => item.id === id);
-  state.textContent = 'Testing path…';
+  state.textContent = t('Testing path…');
   try {
     const result = await runBackgroundTask(
       `share-probe:${id}`,
-      `Test path · ${share?.name || 'share'}`,
+      `${t('Test path')} · ${share?.name || t('share')}`,
       'shares',
       () => request(`/api/v1/shares/${id}/probe`));
     state.textContent = result.exists && result.readable
-      ? 'Path OK · readable'
-      : `Path problem · ${result.error || (result.exists ? 'not readable' : 'not found')}`;
+      ? t('Path OK · readable')
+      : t('Path problem · {{error}}', { error: result.error || t(result.exists ? 'not readable' : 'not found') });
   } catch (error) {
-    state.textContent = `Test failed · ${error.message}`;
+    state.textContent = t('Test failed · {{error}}', { error: error.message });
   }
 };
 
 window.scanShare = async function (id) {
   const state = $(`state-${id}`);
   const share = shares.find(item => item.id === id);
-  state.textContent = 'Scanning…';
+  state.textContent = t('Scanning…');
   try {
     const result = await runBackgroundTask(
       `share-scan:${id}`,
-      `Scan · ${share?.name || 'source'}`,
+      `${t('Scan')} · ${share?.name || t('source')}`,
       'shares',
       () => request(`/api/v1/shares/${id}/scan?limit=1`));
-    state.textContent = `${result.total} media files · ${result.stable} stable · ${result.waitingStable} waiting`;
+    state.textContent = t('{{total}} media files · {{stable}} stable · {{waiting}} waiting', {
+      total: formatNumber(result.total),
+      stable: formatNumber(result.stable),
+      waiting: formatNumber(result.waitingStable)
+    });
   } catch (error) {
-    state.textContent = `Scan failed · ${error.message}`;
+    state.textContent = t('Scan failed · {{error}}', { error: error.message });
   }
 };
 
 window.metadataPreview = async function (id) {
   const state = $(`state-${id}`);
   const share = shares.find(item => item.id === id);
-  state.textContent = 'Reading metadata…';
+  state.textContent = t('Reading metadata…');
   try {
     const result = await runBackgroundTask(
       `metadata-preview:${id}`,
-      `Metadata · ${share?.name || 'source'}`,
+      `${t('Metadata')} · ${share?.name || t('source')}`,
       'shares',
       () => request(`/api/v1/shares/${id}/metadata-preview?limit=5`));
     if (!result.items.length) {
-      state.textContent = 'No stable media yet. Scan again after the stability interval.';
+      state.textContent = t('No stable media yet. Scan again after the stability interval.');
       return;
     }
     const first = result.items[0];
-    const captured = first.metadata.capturedAt || 'no capture time';
+    const captured = first.metadata.capturedAt || t('no capture time');
     const camera = [first.metadata.cameraMake, first.metadata.cameraModel].filter(Boolean).join(' ');
     const error = first.metadata.error ? ` · ${first.metadata.error}` : '';
-    state.textContent = `${result.total} metadata samples · ${captured}${camera ? ` · ${camera}` : ''}${error}`;
+    state.textContent = t('{{count}} metadata samples · {{captured}}', { count: formatNumber(result.total), captured })
+      + (camera ? ` · ${camera}` : '') + error;
   } catch (error) {
-    state.textContent = `Metadata failed · ${error.message}`;
+    state.textContent = t('Metadata failed · {{error}}', { error: error.message });
   }
 };
 
@@ -1154,13 +1185,13 @@ window.editShare = function (id) {
   $('imageSubfolder').value = share.imageSubfolder || '';
   $('videoSubfolder').value = share.videoSubfolder || '';
   syncShareRoleFields();
-  $('formTitle').textContent = `Edit ${share.name}`;
+  $('formTitle').textContent = t('Edit {{name}}', { name: share.name });
   openForm('shares', 'shareFormPanel');
 };
 
 window.deleteShare = async function (id) {
   const share = shares.find(x => x.id === id);
-  if (!share || !confirm(`Remove share “${share.name}”? No media files are deleted.`)) return;
+  if (!share || !confirm(t('Remove share “{{name}}”? No media files are deleted.', { name: share.name }))) return;
   try {
     await request(`/api/v1/shares/${id}`, { method: 'DELETE' });
     await reloadConfiguration();
@@ -1174,14 +1205,14 @@ window.editGroup = function (id) {
   if (!group) return;
   $('groupId').value = group.id;
   $('groupName').value = group.name;
-  $('groupFormTitle').textContent = `Edit ${group.name}`;
+  $('groupFormTitle').textContent = t('Edit {{name}}', { name: group.name });
   renderGroupChoices(group.shareIds);
   openForm('groups', 'groupFormPanel');
 };
 
 window.deleteGroup = async function (id) {
   const group = groups.find(x => x.id === id);
-  if (!group || !confirm(`Remove source group “${group.name}”?`)) return;
+  if (!group || !confirm(t('Remove source group “{{name}}”?', { name: group.name }))) return;
   try {
     await request(`/api/v1/source-groups/${id}`, { method: 'DELETE' });
     await reloadConfiguration();
@@ -1205,7 +1236,7 @@ window.editEvent = function (id) {
   $('eventConflict').value = event.conflictStrategy;
   $('eventDuplicate').value = event.duplicateStrategy;
   $('eventTemplate').value = event.destinationFolderTemplate;
-  $('eventFormTitle').textContent = `Edit ${event.name}`;
+  $('eventFormTitle').textContent = t('Edit {{name}}', { name: event.name });
   openForm('events', 'eventFormPanel');
 };
 
@@ -1231,28 +1262,27 @@ window.backfillEvent = async function (id) {
   const event = events.find(x => x.id === id);
   if (!event) return;
 
-  const range = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'still open'}`;
-  const mode = event.operationMode === 'Copy' ? 'copy' : 'safe-move';
+  const range = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : t('still open')}`;
+  const mode = t(event.operationMode === 'Copy' ? 'copy' : 'safe-move');
   if (!confirm(
-    `Sort existing media into “${event.name}”?\n\n` +
-    `MomentFerry will scan every source share of this event, read capture metadata for files it has ` +
-    `not indexed yet, and ${mode} everything captured in ${range}.\n\n` +
-    `Media matching other events is left alone. On a large share the metadata pass can take a while.`)) {
+    t('Sort existing media into “{{name}}”?', { name: event.name }) + '\n\n' +
+    t('MomentFerry will scan every source share of this event, read capture metadata for files it has not indexed yet, and {{mode}} everything captured in {{range}}.', { mode, range }) + '\n\n' +
+    t('Media matching other events is left alone. On a large share the metadata pass can take a while.'))) {
     return;
   }
 
   const key = `backfill-${id}`;
   try {
-    await runBackgroundTask(key, `Backfill: ${event.name}`, 'events', async () => {
+    await runBackgroundTask(key, `${t('Backfill')}: ${event.name}`, 'events', async () => {
       const started = await request(`/api/v1/events/${id}/backfill`, { method: 'POST' });
-      const summary = await monitorAutomationCycle(started.requestedAt, key, 'Backfill');
+      const summary = await monitorAutomationCycle(started.requestedAt, key, t('Backfill'));
       const routed = appInfo.dryRun !== false
-        ? `${formatNumber(summary.wouldMove)} would be routed (Dry Run)`
-        : `${formatNumber(summary.executed)} routed`;
+        ? t('{{count}} would be routed (Dry Run)', { count: formatNumber(summary.wouldMove) })
+        : t('{{count}} routed', { count: formatNumber(summary.executed) });
       alert(
-        `Backfill finished for “${event.name}”.\n\n` +
-        `${formatNumber(summary.matched)} matched · ${routed}` +
-        (summary.errors ? ` · ${formatNumber(summary.errors)} errors` : ''));
+        t('Backfill finished for “{{name}}”.', { name: event.name }) + '\n\n' +
+        t('{{count}} matched', { count: formatNumber(summary.matched) }) + ` · ${routed}` +
+        (summary.errors ? ` · ${t(summary.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(summary.errors) })}` : ''));
     });
     await reloadEvents();
   } catch (error) {
@@ -1262,7 +1292,7 @@ window.backfillEvent = async function (id) {
 
 window.deleteEvent = async function (id) {
   const event = events.find(x => x.id === id);
-  if (!event || !confirm(`Remove event “${event.name}”?`)) return;
+  if (!event || !confirm(t('Remove event “{{name}}”?', { name: event.name }))) return;
   try {
     await request(`/api/v1/events/${id}`, { method: 'DELETE' });
     await reloadEvents();
@@ -1273,21 +1303,21 @@ window.deleteEvent = async function (id) {
 
 window.executeTransfer = async function (mediaFileId, eventId) {
   const event = events.find(x => x.id === eventId);
-  const action = event?.operationMode === 'Copy'
+  const action = t(event?.operationMode === 'Copy'
     ? 'copy this media file to the verified destination'
-    : 'safe-move this media file; the source is only deleted after destination SHA-256 verification';
-  if (!confirm(`MomentFerry will ${action}. Continue?`)) return;
+    : 'safe-move this media file; the source is only deleted after destination SHA-256 verification');
+  if (!confirm(t('MomentFerry will {{action}}. Continue?', { action }))) return;
 
   try {
     const result = await runBackgroundTask(
       `transfer:${mediaFileId}`,
-      `Transfer · ${event?.name || 'event'}`,
+      `${t('Transfer')} · ${event?.name || t('event')}`,
       'ops',
       () => request('/api/v1/transfers', {
         method: 'POST',
         body: JSON.stringify({ mediaFileId, eventId })
       }));
-    alert(result.message || `Transfer finished: ${result.operation.state}`);
+    alert(result.message || t('Transfer finished: {{state}}', { state: t(result.operation.state) }));
     await refreshOperations();
     await previewRouting();
   } catch (error) {
@@ -1296,14 +1326,14 @@ window.executeTransfer = async function (mediaFileId, eventId) {
 };
 
 window.dismissQuarantine = async function (id) {
-  const resolutionNote = prompt('Describe how this held operation was resolved. The source file will not be deleted.');
+  const resolutionNote = prompt(t('Describe how this held operation was resolved. The source file will not be deleted.'));
   if (resolutionNote === null) return;
   try {
     await request(`/api/v1/quarantine/${id}/dismiss`, {
       method: 'POST',
       body: JSON.stringify({ resolutionNote })
     });
-    $('quarantineMessage').textContent = 'Item dismissed. Source preserved.';
+    $('quarantineMessage').textContent = t('Item dismissed. Source preserved.');
     await Promise.all([refreshQuarantine(), refreshOperations()]);
   } catch (error) {
     $('quarantineMessage').textContent = error.message;
@@ -1311,14 +1341,14 @@ window.dismissQuarantine = async function (id) {
 };
 
 window.retryQuarantine = async function (id) {
-  if (!confirm('Retry this held transfer from the preserved source file?')) return;
+  if (!confirm(t('Retry this held transfer from the preserved source file?'))) return;
   try {
     await runBackgroundTask(
       `quarantine-retry:${id}`,
-      'Retry held transfer',
+      t('Retry held transfer'),
       'ops',
       () => request(`/api/v1/operations/${id}/retry`, { method: 'POST' }));
-    $('quarantineMessage').textContent = 'Held transfer retried.';
+    $('quarantineMessage').textContent = t('Held transfer retried.');
     await Promise.all([refreshQuarantine(), refreshOperations()]);
   } catch (error) {
     $('quarantineMessage').textContent = error.message;
@@ -1385,7 +1415,7 @@ function applyPreset() {
 
 async function loadFolderTree() {
   const tree = $('folderTree');
-  tree.innerHTML = '<div class="subtle">Loading mounted folders…</div>';
+  tree.innerHTML = `<div class="subtle">${t('Loading mounted folders…')}</div>`;
   try {
     const result = await request(`/api/v1/folders?role=${encodeURIComponent($('role').value)}`);
     tree.innerHTML = result.roots.length
@@ -1394,18 +1424,18 @@ async function loadFolderTree() {
             <div class="folder-root-label">${escapeHtml(root.path)}</div>
             <div class="folder-children">${renderFolderNodes(root.folders, 0)}</div>
           </div>`).join('')
-      : '<div class="message">No mounted folders found for this role.</div>';
+      : `<div class="message">${t('No mounted folders found for this role.')}</div>`;
   } catch (error) {
     tree.innerHTML = `<div class="message error">${escapeHtml(error.message)}</div>`;
   }
 }
 
 function renderFolderNodes(folders, depth) {
-  if (!folders.length) return '<div class="subtle" style="font-size:12px">No subfolders.</div>';
+  if (!folders.length) return `<div class="subtle" style="font-size:12px">${t('No subfolders.')}</div>`;
   return folders.map(folder => `
     <div class="folder-node" data-path="${escapeHtml(folder.path)}">
       <div class="folder-row" style="--depth:${depth}">
-        <button type="button" class="btn folder-toggle${folder.hasChildren ? '' : ' placeholder'}" ${folder.hasChildren ? 'aria-expanded="false" aria-label="Expand folder"' : 'disabled aria-hidden="true"'}>${folder.hasChildren ? '›' : '·'}</button>
+        <button type="button" class="btn folder-toggle${folder.hasChildren ? '' : ' placeholder'}" ${folder.hasChildren ? `aria-expanded="false" aria-label="${escapeHtml(t('Expand folder'))}"` : 'disabled aria-hidden="true"'}>${folder.hasChildren ? '›' : '·'}</button>
         <button type="button" class="folder-select${$('path').value === folder.path ? ' selected' : ''}" data-folder-select="${escapeHtml(folder.path)}">
           <span class="folder-name">${escapeHtml(folder.name)}</span>
           <span class="folder-path">${escapeHtml(folder.path)}</span>
@@ -1422,7 +1452,7 @@ async function toggleFolder(button) {
   if (expanded) {
     children.innerHTML = '';
     button.setAttribute('aria-expanded', 'false');
-    button.setAttribute('aria-label', 'Expand folder');
+    button.setAttribute('aria-label', t('Expand folder'));
     button.textContent = '›';
     return;
   }
@@ -1432,7 +1462,7 @@ async function toggleFolder(button) {
     const result = await request(`/api/v1/folders?role=${encodeURIComponent($('role').value)}&path=${encodeURIComponent(node.dataset.path)}`);
     children.innerHTML = renderFolderNodes(result.folders, Number(node.querySelector('.folder-row').style.getPropertyValue('--depth')) + 1);
     button.setAttribute('aria-expanded', 'true');
-    button.setAttribute('aria-label', 'Collapse folder');
+    button.setAttribute('aria-label', t('Collapse folder'));
     button.textContent = '⌄';
   } catch (error) {
     children.innerHTML = `<div class="message error">${escapeHtml(error.message)}</div>`;
@@ -1467,7 +1497,7 @@ function linesToList(value) {
 function resetShareForm() {
   $('shareForm').reset();
   $('shareId').value = '';
-  $('formTitle').textContent = 'Add share';
+  $('formTitle').textContent = t('Add share');
   $('stability').value = 30;
   $('enabled').checked = true;
   $('recursive').checked = true;
@@ -1487,7 +1517,7 @@ function resetShareForm() {
 function resetGroupForm() {
   $('groupForm').reset();
   $('groupId').value = '';
-  $('groupFormTitle').textContent = 'Add source group';
+  $('groupFormTitle').textContent = t('Add source group');
   $('groupMessage').textContent = '';
   renderGroupChoices();
 }
@@ -1495,7 +1525,7 @@ function resetGroupForm() {
 function resetEventForm() {
   $('eventForm').reset();
   $('eventId').value = '';
-  $('eventFormTitle').textContent = 'New event';
+  $('eventFormTitle').textContent = t('New event');
   $('eventType').value = 'Vacation';
   $('eventStart').value = toLocalInput(new Date().toISOString());
   $('eventStatus').value = 'Planned';
@@ -1616,7 +1646,7 @@ function renderPresetChoices() {
   const select = $('sharePreset');
   if (!select) return;
   const current = select.value;
-  select.innerHTML = `<option value="">No renaming</option>` +
+  select.innerHTML = `<option value="">${t('No renaming')}</option>` +
     renamePresets.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
   select.value = current;
 }
@@ -1625,7 +1655,7 @@ function renderRenamePresets() {
   const list = $('presetList');
   if (!list) return;
   if (!renamePresets.length) {
-    list.innerHTML = '<div class="empty"><strong>No presets yet</strong>A preset is a filename template you can attach to a source or a destination.</div>';
+    list.innerHTML = `<div class="empty"><strong>${t('No presets yet')}</strong>${t('A preset is a filename template you can attach to a source or a destination.')}</div>`;
     return;
   }
 
@@ -1638,12 +1668,12 @@ function renderRenamePresets() {
             <span class="list-title">${escapeHtml(preset.name)}</span>
           </div>
           <div class="list-path">${escapeHtml(preset.template)}</div>
-          <div class="list-meta">${usedBy.length ? `Used by ${escapeHtml(usedBy.join(', '))}` : 'Not attached to a share yet'}</div>
+          <div class="list-meta">${usedBy.length ? t('Used by {{shares}}', { shares: escapeHtml(usedBy.join(', ')) }) : t('Not attached to a share yet')}</div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-sm btn-ghost" type="button" onclick="editPreset('${escapeHtml(preset.id)}')">Edit</button>
-          <button class="btn btn-sm btn-ghost" type="button" onclick="tryPreset('${escapeHtml(preset.id)}')">Preview</button>
-          <button class="btn btn-sm btn-danger" type="button" onclick="deletePreset('${escapeHtml(preset.id)}')">Remove</button>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="editPreset('${escapeHtml(preset.id)}')">${t('Edit')}</button>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="tryPreset('${escapeHtml(preset.id)}')">${t('Preview')}</button>
+          <button class="btn btn-sm btn-danger" type="button" onclick="deletePreset('${escapeHtml(preset.id)}')">${t('Remove')}</button>
         </div>
       </article>`;
   }).join('');
@@ -1653,7 +1683,7 @@ function renderMappings() {
   const list = $('mappingList');
   if (!list) return;
   if (!cameraMappings.length) {
-    list.innerHTML = '<div class="list-meta">No mappings yet. The reported model is used as-is.</div>';
+    list.innerHTML = `<div class="list-meta">${t('No mappings yet. The reported model is used as-is.')}</div>`;
     return;
   }
 
@@ -1663,7 +1693,7 @@ function renderMappings() {
         <div class="mono" style="font-size:12.5px">${escapeHtml(mapping.from)} → <b>${escapeHtml(mapping.to)}</b></div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-sm btn-danger" type="button" onclick="deleteMapping('${escapeHtml(mapping.id)}')">Remove</button>
+        <button class="btn btn-sm btn-danger" type="button" onclick="deleteMapping('${escapeHtml(mapping.id)}')">${t('Remove')}</button>
       </div>
     </article>`).join('');
 }
@@ -1685,12 +1715,12 @@ async function refreshRenamePreview() {
         <div class="list-main">
           <div class="mono" style="font-size:12px;color:var(--mut)">${escapeHtml(sample.original)}</div>
           <div class="mono" style="font-size:13px">${unchanged
-            ? '<span style="color:var(--mut)">unchanged until a template is set</span>'
+            ? `<span style="color:var(--mut)">${t('unchanged until a template is set')}</span>`
             : `<b class="acc">${escapeHtml(sample.result)}</b>`}</div>
         </div>
         <div class="list-side">
-          <div class="list-meta">${escapeHtml(sample.origin || 'sample')}</div>
-          <div class="list-meta">${sample.camera ? escapeHtml(sample.camera) : 'no camera'}</div>
+          <div class="list-meta">${escapeHtml(sample.origin || t('sample'))}</div>
+          <div class="list-meta">${sample.camera ? escapeHtml(sample.camera) : t('no camera')}</div>
         </div>
       </div>`).join('');
   } catch (error) {
@@ -1709,7 +1739,7 @@ window.editPreset = function (id) {
   $('presetId').value = preset.id;
   $('presetName').value = preset.name;
   $('presetTemplate').value = preset.template;
-  $('presetFormTitle').textContent = `Edit ${preset.name}`;
+  $('presetFormTitle').textContent = t('Edit {{name}}', { name: preset.name });
   openForm('renaming', 'presetFormPanel');
 };
 
@@ -1725,9 +1755,9 @@ window.deletePreset = async function (id) {
   const preset = renamePresets.find(x => x.id === id);
   const usedBy = shares.filter(s => s.renamePresetId === id).map(s => s.name);
   const warning = usedBy.length
-    ? `\n\n${usedBy.join(', ')} will stop renaming and keep original filenames.`
+    ? '\n\n' + t('{{shares}} will stop renaming and keep original filenames.', { shares: usedBy.join(', ') })
     : '';
-  if (!preset || !confirm(`Remove preset “${preset.name}”?${warning}`)) return;
+  if (!preset || !confirm(t('Remove preset “{{name}}”?', { name: preset.name }) + warning)) return;
   try {
     await request(`/api/v1/rename-presets/${id}`, { method: 'DELETE' });
     await reloadConfiguration();
@@ -1749,7 +1779,7 @@ window.deleteMapping = async function (id) {
 function resetPresetForm() {
   $('presetForm').reset();
   $('presetId').value = '';
-  $('presetFormTitle').textContent = 'Add preset';
+  $('presetFormTitle').textContent = t('Add preset');
   $('presetMessage').textContent = '';
 }
 
@@ -1853,6 +1883,7 @@ document.addEventListener('click', event => {
 
 /* Boot -------------------------------------------------------------------- */
 
+initI18n();
 applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 setView(location.hash.slice(1) || 'overview');
 setInterval(renderNextScanCountdown, 1000);

@@ -72,9 +72,9 @@ async function saveSettings(overrides, messageTarget) {
     applySettingsToForm(updated);
     if (target) {
       target.className = 'message ok';
-      target.textContent = updated.dryRun
+      target.textContent = t(updated.dryRun
         ? 'Saved. Media operations remain non-destructive.'
-        : 'Saved. LIVE transfers are enabled.';
+        : 'Saved. LIVE transfers are enabled.');
     }
     await loadAutomationStatus();
     return updated;
@@ -96,7 +96,7 @@ async function loadRuntimeSettings() {
     $('settingsMessage').className = 'message';
   } catch (error) {
     $('settingsMessage').className = 'message error';
-    $('settingsMessage').textContent = `Settings failed: ${error.message}`;
+    $('settingsMessage').textContent = t('Settings failed: {{error}}', { error: error.message });
   }
 }
 
@@ -108,10 +108,10 @@ function openLiveModal() {
   const safeMove = events.some(x => x.status === 'Active' && x.operationMode !== 'Copy');
 
   $('liveModalFacts').innerHTML = `
-    <div class="kicker" style="margin-bottom:9px">This will affect</div>
-    <div class="modal-fact"><span>Files matched by the last scan</span><b>${matched.toLocaleString()}</b></div>
-    ${safeMove ? `<div class="modal-fact"><span>Originals deleted after verifying</span><b>${matched.toLocaleString()}</b></div>` : ''}
-    <div class="modal-fact"><span>Held for review, untouched</span><b class="amb">${held.toLocaleString()}</b></div>`;
+    <div class="kicker" style="margin-bottom:9px">${t('This will affect')}</div>
+    <div class="modal-fact"><span>${t('Files matched by the last scan')}</span><b>${formatNumber(matched)}</b></div>
+    ${safeMove ? `<div class="modal-fact"><span>${t('Originals deleted after verifying')}</span><b>${formatNumber(matched)}</b></div>` : ''}
+    <div class="modal-fact"><span>${t('Held for review, untouched')}</span><b class="amb">${formatNumber(held)}</b></div>`;
 
   $('liveModalToken').value = '';
   $('liveModalConfirm').disabled = true;
@@ -181,40 +181,46 @@ async function loadAutomationStatus() {
     storageInfo = storage;
 
     const automation = result.automation;
-    const mode = result.mode === 'live' ? 'Live' : 'Dry Run';
-    const enabled = result.automationEnabled ? 'Automation running' : 'Automation off';
+    const mode = t(result.mode === 'live' ? 'Live' : 'Dry Run');
+    const enabled = t(result.automationEnabled ? 'Automation running' : 'Automation off');
     const healthy = result.automationEnabled && !automation.lastError;
     $('automationDot').className = `dot ${healthy ? 'dot-acc' : (automation.lastError ? 'dot-red' : 'dot-amb')}`;
 
     if (!automation.lastCycleStartedAt) {
-      target.textContent = `${enabled} · ${mode} · no cycle recorded yet · ${formatStorageStatus(storage)}`;
+      target.textContent = `${enabled} · ${mode} · ${t('no cycle recorded yet')} · ${formatStorageStatus(storage)}`;
     } else {
       const completed = automation.lastCycleCompletedAt
-        ? new Date(automation.lastCycleCompletedAt).toLocaleTimeString()
-        : 'running';
-      const error = automation.lastError ? ` · last error: ${automation.lastError}` : '';
-      target.textContent = `${enabled} · ${mode} · last cycle ${completed} · `
-        + `${automation.lastSourceShares} sources · ${automation.lastMatched} matched · `
-        + `${automation.lastWouldMove} would move · ${automation.lastExecuted} executed · ${automation.lastSkipped} skipped · `
-        + `${automation.lastErrors} errors${error} · ${formatStorageStatus(storage)}`;
+        ? new Date(automation.lastCycleCompletedAt).toLocaleTimeString(MF_LANG)
+        : t('running');
+      const error = automation.lastError ? ` · ${t('last error: {{error}}', { error: automation.lastError })}` : '';
+      target.textContent = `${enabled} · ${mode} · ${t('last cycle {{time}}', { time: completed })} · `
+        + t('{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors', {
+          sources: formatNumber(automation.lastSourceShares),
+          matched: formatNumber(automation.lastMatched),
+          wouldMove: formatNumber(automation.lastWouldMove),
+          executed: formatNumber(automation.lastExecuted),
+          skipped: formatNumber(automation.lastSkipped),
+          errors: formatNumber(automation.lastErrors)
+        })
+        + `${error} · ${formatStorageStatus(storage)}`;
     }
 
     renderOverview();
     if (!$('view-setup').classList.contains('hidden')) renderSetup();
   } catch (error) {
     $('automationDot').className = 'dot dot-red';
-    target.textContent = `Status failed: ${error.message}`;
+    target.textContent = t('Status failed: {{error}}', { error: error.message });
   }
 }
 
 function formatStorageStatus(storage) {
-  if (!storage?.items?.length) return 'no destination storage configured';
+  if (!storage?.items?.length) return t('no destination storage configured');
   const items = storage.items.map(item => {
-    if (!item.exists) return `${item.name}: path missing`;
-    if (item.availableFreeSpaceBytes == null) return `${item.name}: free space unknown`;
-    return `${item.name}: ${formatBytes(item.availableFreeSpaceBytes)} free${item.belowReserve ? ' LOW' : ''}`;
+    if (!item.exists) return `${item.name}: ${t('path missing')}`;
+    if (item.availableFreeSpaceBytes == null) return `${item.name}: ${t('free space unknown')}`;
+    return `${item.name}: ${t('{{size}} free', { size: formatBytes(item.availableFreeSpaceBytes) })}${item.belowReserve ? ` ${t('LOW')}` : ''}`;
   });
-  return `${items.join(', ')} · reserve ${formatBytes(storage.minimumFreeSpaceReserveBytes)}`;
+  return `${items.join(', ')} · ${t('reserve {{size}}', { size: formatBytes(storage.minimumFreeSpaceReserveBytes) })}`;
 }
 
 /* Settings form ------------------------------------------------------------ */
@@ -232,12 +238,12 @@ $('settingsForm').addEventListener('submit', async (event) => {
 });
 
 $('resetSettings').addEventListener('click', async () => {
-  if (!confirm('Reset runtime settings to the Docker/application defaults?')) return;
+  if (!confirm(t('Reset runtime settings to the Docker/application defaults?'))) return;
   try {
     const settings = await settingsRequest('/api/v1/settings', { method: 'DELETE' });
     applySettingsToForm(settings);
     $('settingsMessage').className = 'message ok';
-    $('settingsMessage').textContent = 'Runtime settings reset to defaults.';
+    $('settingsMessage').textContent = t('Runtime settings reset to defaults.');
     await loadAutomationStatus();
   } catch (error) {
     $('settingsMessage').className = 'message error';
@@ -259,19 +265,21 @@ function renderImageUpdate(status) {
   const install = $('installImageUpdate');
 
   const completed = status.lastUpdateCompletedAt
-    ? ` · updated ${new Date(status.lastUpdateCompletedAt).toLocaleString()}`
+    ? ` · ${t('updated {{time}}', { time: new Date(status.lastUpdateCompletedAt).toLocaleString(MF_LANG) })}`
     : '';
 
   if (status.updateAvailable && status.latestVersion) {
     banner.classList.add('card-accent');
     headline.style.color = 'var(--acctxt)';
-    headline.textContent = `${status.latestVersion} is available`;
-    detail.textContent = `You are running ${status.runningVersion}. The update is applied by an isolated companion container, so MomentFerry can restart itself safely.${status.lastError ? ` · ${status.lastError}` : ''}`;
+    headline.textContent = t('{{version}} is available', { version: status.latestVersion });
+    detail.textContent = t('You are running {{version}}. The update is applied by an isolated companion container, so MomentFerry can restart itself safely.', { version: status.runningVersion })
+      + (status.lastError ? ` · ${status.lastError}` : '');
   } else {
     banner.classList.remove('card-accent');
     headline.style.color = 'var(--txt)';
-    headline.textContent = `Running ${status.runningVersion}`;
-    detail.textContent = `${status.latestVersion ? `Latest stable is ${status.latestVersion}. ` : ''}No update pending.${completed}${status.lastError ? ` · ${status.lastError}` : ''}`;
+    headline.textContent = t('Running {{version}}', { version: status.runningVersion });
+    detail.textContent = `${status.latestVersion ? `${t('Latest stable is {{version}}.', { version: status.latestVersion })} ` : ''}`
+      + t('No update pending.') + completed + (status.lastError ? ` · ${status.lastError}` : '');
   }
 
   changelog.textContent = status.changelog || '';
@@ -280,7 +288,7 @@ function renderImageUpdate(status) {
 
   install.classList.toggle('hidden', !status.updateAvailable);
   install.disabled = !status.updaterConfigured;
-  install.title = status.updaterConfigured ? '' : 'Updater companion is not configured';
+  install.title = status.updaterConfigured ? '' : t('Updater companion is not configured');
 
   // Prefer the checked release page; fall back to the running version's own tag so the link
   // is present before any update check has run.
@@ -290,27 +298,27 @@ function renderImageUpdate(status) {
   if (linkUrl) {
     link.href = linkUrl;
     link.textContent = status.releaseUrl && status.latestVersion
-      ? `View ${status.latestVersion} release notes on GitHub`
-      : `View ${status.runningVersion} on GitHub`;
+      ? t('View {{version}} release notes on GitHub', { version: status.latestVersion })
+      : t('View {{version}} on GitHub', { version: status.runningVersion });
   }
 
-  $('versionRunning').textContent = status.runningVersion || 'unknown';
+  $('versionRunning').textContent = status.runningVersion || t('unknown');
   const sideUpdate = $('versionUpdate');
   sideUpdate.classList.toggle('hidden', !status.updateAvailable);
-  if (status.updateAvailable) sideUpdate.textContent = `${status.latestVersion} available →`;
+  if (status.updateAvailable) sideUpdate.textContent = t('{{version}} available →', { version: status.latestVersion });
 }
 
 async function checkImageUpdate() {
-  $('imageUpdateStatus').textContent = 'Checking for stable image updates…';
+  $('imageUpdateStatus').textContent = t('Checking for stable image updates…');
   try {
     const status = await runBackgroundTask(
       'image-update-check',
-      'Check for image updates',
+      t('Check for image updates'),
       'updates',
       () => settingsRequest('/api/v1/updates/check', { method: 'POST' }));
     renderImageUpdate(status);
   } catch (error) {
-    $('imageUpdateStatus').textContent = `Update check failed: ${error.message}`;
+    $('imageUpdateStatus').textContent = t('Update check failed: {{error}}', { error: error.message });
   }
 }
 
@@ -325,21 +333,21 @@ async function waitForUpdatedMomentFerry(expectedVersion, timeoutMs = 180000) {
       if (status.runningVersion === expectedVersion && !status.updateAvailable) return status;
     } catch {}
   }
-  throw new Error(`MomentFerry did not return with version ${expectedVersion} within three minutes.`);
+  throw new Error(t('MomentFerry did not return with version {{version}} within three minutes.', { version: expectedVersion }));
 }
 
 $('installImageUpdate').addEventListener('click', async () => {
-  const confirmation = prompt('The MomentFerry container will restart. Type INSTALL_UPDATE to continue.');
+  const confirmation = prompt(t('The MomentFerry container will restart. Type INSTALL_UPDATE to continue.'));
   if (confirmation !== 'INSTALL_UPDATE') return;
 
   const expectedVersion = updateInfo.latestVersion;
   const statusText = $('imageUpdateStatus');
   const install = $('installImageUpdate');
   install.disabled = true;
-  statusText.textContent = `Installing ${expectedVersion}. MomentFerry will restart…`;
+  statusText.textContent = t('Installing {{version}}. MomentFerry will restart…', { version: expectedVersion });
 
   try {
-    const status = await runBackgroundTask('image-update', `Install ${expectedVersion}`, 'updates', async () => {
+    const status = await runBackgroundTask('image-update', t('Install {{version}}', { version: expectedVersion }), 'updates', async () => {
       try {
         await settingsRequest('/api/v1/updates/install', {
           method: 'POST',
@@ -349,14 +357,14 @@ $('installImageUpdate').addEventListener('click', async () => {
         if (error.status) throw error;
       }
 
-      statusText.textContent = 'Update requested. Waiting for MomentFerry to restart…';
+      statusText.textContent = t('Update requested. Waiting for MomentFerry to restart…');
       return waitForUpdatedMomentFerry(expectedVersion);
     });
     renderImageUpdate(status);
-    statusText.textContent = `Updated to ${status.runningVersion}. Reloading…`;
+    statusText.textContent = t('Updated to {{version}}. Reloading…', { version: status.runningVersion });
     window.location.reload();
   } catch (error) {
-    statusText.textContent = `Update failed: ${error.message}`;
+    statusText.textContent = t('Update failed: {{error}}', { error: error.message });
     install.disabled = false;
   }
 });
@@ -366,9 +374,9 @@ $('settingsAutomaticImageUpdates').addEventListener('change', async () => {
   try {
     await saveSettings({});
     message.className = 'message ok';
-    message.textContent = $('settingsAutomaticImageUpdates').checked
+    message.textContent = t($('settingsAutomaticImageUpdates').checked
       ? 'Stable updates will install automatically.'
-      : 'Automatic updates are off.';
+      : 'Automatic updates are off.');
   } catch (error) {
     message.className = 'message error';
     message.textContent = error.message;
@@ -385,5 +393,5 @@ async function pollAutomationStatus() {
 loadRuntimeSettings();
 pollAutomationStatus();
 settingsRequest('/api/v1/updates').then(renderImageUpdate).catch(() => {
-  $('versionRunning').textContent = 'unknown';
+  $('versionRunning').textContent = t('unknown');
 });

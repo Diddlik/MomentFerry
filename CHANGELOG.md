@@ -6,6 +6,13 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.6.0] - 2026-08-23
+
+### Added
+
+- the Web UI speaks German, Russian, Polish, Italian, French and Ukrainian besides English. The language is picked from the browser on first use and can be changed at the bottom of the sidebar; the choice is stored per browser, so nothing about the installation itself changes;
+- adding a further language means dropping one file into `wwwroot/i18n/` and naming it in the language list. Translation keys are the English source strings, so an untranslated entry falls back to English instead of showing a broken label, and a test fails the build when a language file drifts from the reference catalog.
+
 ## [1.5.1] - 2026-08-23
 
 ### Fixed
