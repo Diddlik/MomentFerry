@@ -56,13 +56,13 @@ public sealed class FileNameTemplateTests
     }
 
     [Fact]
-    public void Render_SanitizesCharactersThatCannotAppearInAFileName()
+    public void Render_SanitizesTheSameCharactersOnEveryPlatform()
     {
+        // Linux reports only '/' as invalid, so relying on the platform list would let the container
+        // write names that are unusable when the same library is opened from Windows over SMB.
         var result = FileNameTemplate.Render("{event.name}_{name}", Context(stem: "a:b*c") with { EventName = "Trip/2026" }, 1);
 
-        Assert.DoesNotContain('/', result);
-        Assert.DoesNotContain(':', result);
-        Assert.DoesNotContain('*', result);
+        Assert.Equal("Trip_2026_a_b_c", result);
     }
 
     [Fact]

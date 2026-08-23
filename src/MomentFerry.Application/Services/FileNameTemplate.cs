@@ -23,6 +23,11 @@ public sealed record FileNameContext(
 /// </summary>
 public static partial class FileNameTemplate
 {
+    // Fixed rather than Path.GetInvalidFileNameChars(): that returns only '/' and NUL on Linux, so the
+    // Linux container would keep characters the same library is unusable with over SMB from Windows.
+    private static readonly char[] InvalidFileNameCharacters =
+        ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
     private const string DefaultCapturedFormat = "yyyyMMdd_HHmmss";
     private const string DefaultSequenceFormat = "0000";
 
@@ -76,11 +81,11 @@ public static partial class FileNameTemplate
     /// </summary>
     private static string Clean(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(value.Length);
         foreach (var character in value)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 ? '_' : character);
+            var invalid = char.IsControl(character) || Array.IndexOf(InvalidFileNameCharacters, character) >= 0;
+            builder.Append(invalid ? '_' : character);
         }
 
         var collapsed = CollapsePattern().Replace(builder.ToString(), "$1");
