@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.3.1] - 2026-08-23
+
+### Added
+
+- the Updates view links the running version to its release page on GitHub, and to the latest release notes once an update check has run. The repository is derived from the configured release API URL rather than hardcoded in the browser.
+
 ## [1.3.0] - 2026-08-23
 
 ### Added

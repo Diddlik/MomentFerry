@@ -282,6 +282,18 @@ function renderImageUpdate(status) {
   install.disabled = !status.updaterConfigured;
   install.title = status.updaterConfigured ? '' : 'Updater companion is not configured';
 
+  // Prefer the checked release page; fall back to the running version's own tag so the link
+  // is present before any update check has run.
+  const link = $('releaseLink');
+  const linkUrl = status.releaseUrl || status.runningVersionUrl;
+  link.classList.toggle('hidden', !linkUrl);
+  if (linkUrl) {
+    link.href = linkUrl;
+    link.textContent = status.releaseUrl && status.latestVersion
+      ? `View ${status.latestVersion} release notes on GitHub`
+      : `View ${status.runningVersion} on GitHub`;
+  }
+
   $('versionRunning').textContent = status.runningVersion || 'unknown';
   const sideUpdate = $('versionUpdate');
   sideUpdate.classList.toggle('hidden', !status.updateAvailable);

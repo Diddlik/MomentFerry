@@ -22,7 +22,8 @@ public sealed record ImageUpdateStatus(
     DateTimeOffset? LastCheckedAt,
     DateTimeOffset? LastUpdateRequestedAt,
     DateTimeOffset? LastUpdateCompletedAt,
-    string? LastError);
+    string? LastError,
+    string? RunningVersionUrl = null);
 
 public sealed class ImageUpdateService(
     HttpClient http,
@@ -42,7 +43,8 @@ public sealed class ImageUpdateService(
         var current = (status ?? EmptyStatus(runtime.AutomaticImageUpdatesEnabled)) with
         {
             RunningVersion = options.RunningVersion,
-            AutomaticUpdatesEnabled = runtime.AutomaticImageUpdatesEnabled
+            AutomaticUpdatesEnabled = runtime.AutomaticImageUpdatesEnabled,
+            RunningVersionUrl = RunningVersionUrl
         };
         if (current.LastUpdateRequestedAt is not null &&
             (current.LastUpdateCompletedAt is null || current.LastUpdateRequestedAt > current.LastUpdateCompletedAt) &&
@@ -146,6 +148,26 @@ public sealed class ImageUpdateService(
         }
     }
 
+    /// <summary>
+    /// Builds the GitHub release page for a version from the configured release API URL, so the repository
+    /// location stays configurable instead of being hardcoded in the browser UI. Returns null for the
+    /// placeholder version and for a release API URL that is not a GitHub repository endpoint.
+    /// </summary>
+    public static string? BuildReleaseTagUrl(string releaseApiUrl, string version)
+    {
+        if (string.IsNullOrWhiteSpace(version) || version.StartsWith("0.0.0", StringComparison.Ordinal)) return null;
+        if (!Uri.TryCreate(releaseApiUrl, UriKind.Absolute, out var api)) return null;
+        if (!api.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var segments = api.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3 || !segments[0].Equals("repos", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var tag = version.StartsWith('v') ? version : "v" + version;
+        return $"https://github.com/{segments[1]}/{segments[2]}/releases/tag/{Uri.EscapeDataString(tag)}";
+    }
+
+    private string? RunningVersionUrl => BuildReleaseTagUrl(options.ReleaseApiUrl, options.RunningVersion);
+
     private bool IsUpdaterConfigured() =>
         Uri.TryCreate(options.WatchtowerUrl, UriKind.Absolute, out _) && !string.IsNullOrWhiteSpace(options.WatchtowerToken);
 
@@ -169,7 +191,7 @@ public sealed class ImageUpdateService(
     private async Task<ImageUpdateStatus> PersistAsync(ImageUpdateStatus value, CancellationToken cancellationToken)
     {
         await statusStore.SaveAsync(value, cancellationToken);
-        return value;
+        return value with { RunningVersionUrl = RunningVersionUrl };
     }
 
     private sealed record GitHubRelease(

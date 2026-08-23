@@ -158,6 +158,39 @@ public sealed class ImageUpdateServiceTests
             throw new HttpRequestException("release service unavailable");
     }
 
+    [Theory]
+    [InlineData("1.3.0", "https://github.com/diddlik/MomentFerry/releases/tag/v1.3.0")]
+    [InlineData("v1.3.0", "https://github.com/diddlik/MomentFerry/releases/tag/v1.3.0")]
+    [InlineData("1.4.0-rc.1", "https://github.com/diddlik/MomentFerry/releases/tag/v1.4.0-rc.1")]
+    public void BuildReleaseTagUrl_DerivesTheReleasePageFromTheConfiguredApiUrl(string version, string expected)
+    {
+        var url = ImageUpdateService.BuildReleaseTagUrl(
+            "https://api.github.com/repos/diddlik/MomentFerry/releases/latest",
+            version);
+
+        Assert.Equal(expected, url);
+    }
+
+    [Theory]
+    [InlineData("0.0.0")]
+    [InlineData("0.0.0-dev.42")]
+    [InlineData("")]
+    public void BuildReleaseTagUrl_SkipsPlaceholderVersionsThatHaveNoTag(string version)
+    {
+        Assert.Null(ImageUpdateService.BuildReleaseTagUrl(
+            "https://api.github.com/repos/diddlik/MomentFerry/releases/latest",
+            version));
+    }
+
+    [Theory]
+    [InlineData("https://gitea.example.com/api/v1/repos/x/y/releases/latest")]
+    [InlineData("not-a-url")]
+    [InlineData("https://api.github.com/rate_limit")]
+    public void BuildReleaseTagUrl_ReturnsNullForNonGitHubRepositoryEndpoints(string apiUrl)
+    {
+        Assert.Null(ImageUpdateService.BuildReleaseTagUrl(apiUrl, "1.3.0"));
+    }
+
     private sealed class MemorySettingsStore : IRuntimeSettingsStore
     {
         private MomentFerryRuntimeSettings settings = new();
