@@ -1521,6 +1521,7 @@ $('shareForm').addEventListener('submit', async (event) => {
     owner: $('owner').value || null,
     group: null,
     preset: $('preset').value || null,
+    renamePresetId: $('sharePreset').value || null,
     stabilitySeconds: Number($('stability').value),
     recursive: $('recursive').checked,
     defaultTimeZone: $('timezone').value || null,
