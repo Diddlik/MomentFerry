@@ -11,7 +11,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
         var result = new List<Share>();
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder FROM shares ORDER BY name";
+        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder, rename_preset_id FROM shares ORDER BY name";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -24,7 +24,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
     {
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder FROM shares WHERE id = $id";
+        command.CommandText = "SELECT id, name, path, role, enabled, owner, group_name, preset, stability_seconds, recursive, default_timezone, ignore_patterns_json, allowed_media_types_json, image_extensions_json, video_extensions_json, image_subfolder, video_subfolder, rename_preset_id FROM shares WHERE id = $id";
         command.Parameters.AddWithValue("$id", id.ToString("D"));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
@@ -41,12 +41,12 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
                 stability_seconds, recursive, default_timezone,
                 ignore_patterns_json, allowed_media_types_json,
                 image_extensions_json, video_extensions_json, image_subfolder, video_subfolder,
-                created_at_utc, updated_at_utc)
+                rename_preset_id, created_at_utc, updated_at_utc)
             VALUES (
                 $id, $name, $path, $role, $enabled, $owner, $group, $preset,
                 $stability, $recursive, $timezone, $ignore, $types,
                 $imageExtensions, $videoExtensions, $imageSubfolder, $videoSubfolder,
-                $created, $updated)
+                $renamePreset, $created, $updated)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 path = excluded.path,
@@ -64,6 +64,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
                 video_extensions_json = excluded.video_extensions_json,
                 image_subfolder = excluded.image_subfolder,
                 video_subfolder = excluded.video_subfolder,
+                rename_preset_id = excluded.rename_preset_id,
                 updated_at_utc = excluded.updated_at_utc;
             """;
         command.Parameters.AddWithValue("$id", share.Id.ToString("D"));
@@ -83,6 +84,7 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
         command.Parameters.AddWithValue("$videoExtensions", JsonSerializer.Serialize(share.VideoExtensions));
         command.Parameters.AddWithValue("$imageSubfolder", (object?)share.ImageSubfolder ?? DBNull.Value);
         command.Parameters.AddWithValue("$videoSubfolder", (object?)share.VideoSubfolder ?? DBNull.Value);
+        command.Parameters.AddWithValue("$renamePreset", share.RenamePresetId is { } preset ? preset.ToString("D") : DBNull.Value);
         command.Parameters.AddWithValue("$created", now);
         command.Parameters.AddWithValue("$updated", now);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -125,7 +127,8 @@ public sealed class SqliteShareRepository(SqliteConnectionFactory connectionFact
             ImageExtensions = ReadExtensions(reader, 13),
             VideoExtensions = ReadExtensions(reader, 14),
             ImageSubfolder = reader.IsDBNull(15) ? null : reader.GetString(15),
-            VideoSubfolder = reader.IsDBNull(16) ? null : reader.GetString(16)
+            VideoSubfolder = reader.IsDBNull(16) ? null : reader.GetString(16),
+            RenamePresetId = reader.IsDBNull(17) ? null : Guid.Parse(reader.GetString(17))
         };
     }
 }

@@ -54,6 +54,9 @@
         <button class="nav-item" type="button" data-view="groups">
           <span>Source groups</span><span class="nav-badge" id="badgeGroups"></span>
         </button>
+        <button class="nav-item" type="button" data-view="renaming">
+          <span>File naming</span><span class="nav-badge" id="badgeRenaming"></span>
+        </button>
         <button class="nav-item" type="button" data-view="preview">
           <span>Routing preview</span><span class="nav-badge"></span>
         </button>
@@ -313,6 +316,12 @@
                 <input id="videoSubfolder" class="mono" placeholder="Videos" />
               </label>
             </div>
+            <div class="grid-2">
+              <label class="field">File naming preset (optional)
+                <select id="sharePreset"></select>
+              </label>
+              <div class="field"></div>
+            </div>
             <p class="card-sub" id="subfolderHint" style="margin:-6px 0 14px">Leave both empty to keep photos and videos together in the event folder.</p>
 
             <div class="folder-browser hidden" id="folderBrowser" aria-live="polite">
@@ -335,6 +344,72 @@
       </section>
 
       <!-- SOURCE GROUPS ----------------------------------------------- -->
+      <!-- FILE NAMING ---------------------------------------------------- -->
+      <section class="view hidden" id="view-renaming">
+        <div class="card card-lg">
+          <div class="card-title">Live preview</div>
+          <div class="card-sub" style="margin-bottom:14px">
+            A source preset normalizes the incoming name, then the destination preset shapes the stored name.
+            Both are optional. The extension always comes from the original file.
+          </div>
+          <div class="grid-2">
+            <label class="field">Source template
+              <input id="previewSourceTemplate" class="mono" placeholder="{captured:yyyyMMdd_HHmmss}" />
+            </label>
+            <label class="field">Destination template
+              <input id="previewDestinationTemplate" class="mono" placeholder="{name}_{camera}_{seq:0000}" />
+            </label>
+          </div>
+          <div id="renamePreview" class="stack" style="gap:6px;margin-top:6px"></div>
+          <div class="card-sub" style="margin-top:14px">
+            Tokens: <span class="mono">{name} {captured:FORMAT} {year} {month} {day} {camera} {camera.make}
+            {camera.model} {source} {owner} {event.name} {event.type} {seq:0000}</span>.
+            A token with no value disappears and its leftover separator is cleaned up.
+          </div>
+        </div>
+
+        <div class="row-end" style="margin-top:16px"><button class="btn" type="button" id="newPreset">New preset</button></div>
+
+        <div class="card card-lg hidden" id="presetFormPanel">
+          <div class="card-title" id="presetFormTitle">Add preset</div>
+          <form id="presetForm">
+            <input id="presetId" type="hidden" />
+            <div class="grid-2">
+              <label class="field">Name<input id="presetName" required placeholder="Phone photos" /></label>
+              <label class="field">Template
+                <input id="presetTemplate" class="mono" required placeholder="{captured:yyyyMMdd_HHmmss}_{camera}_{seq:0000}" />
+              </label>
+            </div>
+            <div class="actions">
+              <button class="btn btn-acc" type="submit">Save preset</button>
+              <button class="btn btn-ghost" id="cancelPreset" type="button">Cancel</button>
+            </div>
+            <p class="message" id="presetMessage"></p>
+          </form>
+        </div>
+
+        <div class="stack" id="presetList"></div>
+
+        <div class="card card-lg" style="margin-top:18px">
+          <div class="card-title">Camera names</div>
+          <div class="card-sub" style="margin-bottom:14px">
+            Cameras report model codes rather than product names. Map a reported value to the name you want
+            <span class="mono">{camera}</span> to produce.
+          </div>
+          <form id="mappingForm">
+            <div class="grid-3">
+              <label class="field">Reported<input id="mappingFrom" class="mono" required placeholder="CPH2581" /></label>
+              <label class="field">Use instead<input id="mappingTo" class="mono" required placeholder="OnePlus12" /></label>
+              <div class="field" style="justify-content:flex-end">
+                <button class="btn btn-acc" type="submit">Add mapping</button>
+              </div>
+            </div>
+            <p class="message" id="mappingMessage"></p>
+          </form>
+          <div class="stack" id="mappingList" style="margin-top:10px"></div>
+        </div>
+      </section>
+
       <section class="view hidden" id="view-groups">
         <div class="row-end"><button class="btn" type="button" id="newGroup">New group</button></div>
 

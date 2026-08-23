@@ -26,6 +26,7 @@ builder.Services.AddSingleton<ShareDiscoveryService>();
 builder.Services.AddSingleton<IMediaMetadataExtractor, ExifToolMetadataExtractor>();
 builder.Services.AddSingleton<MetadataPreviewService>();
 builder.Services.AddSingleton<DestinationPathResolver>();
+builder.Services.AddSingleton<RenameContextFactory>();
 builder.Services.AddSingleton<RoutingPreviewService>();
 builder.Services.AddSingleton<SafeTransferService>();
 builder.Services.AddSingleton<TransferCoordinator>();
@@ -80,6 +81,8 @@ builder.Services.AddSingleton<IDatabaseInitializer, SqliteDatabaseInitializer>()
 builder.Services.AddSingleton<IShareRepository, SqliteShareRepository>();
 builder.Services.AddSingleton<ISourceGroupRepository, SqliteSourceGroupRepository>();
 builder.Services.AddSingleton<IMediaEventRepository, SqliteMediaEventRepository>();
+builder.Services.AddSingleton<IRenamePresetRepository, SqliteRenamePresetRepository>();
+builder.Services.AddSingleton<ICameraMappingRepository, SqliteCameraMappingRepository>();
 builder.Services.AddSingleton<IMediaFileRepository, SqliteMediaFileRepository>();
 builder.Services.AddSingleton<IMediaOperationRepository, SqliteMediaOperationRepository>();
 
@@ -360,6 +363,7 @@ app.MapDelete("/api/v1/shares/{id:guid}", async (Guid id, IShareRepository repos
 app.MapSourceGroupEndpoints();
 app.MapEventEndpoints();
 app.MapRoutingEndpoints();
+app.MapRenameEndpoints();
 app.MapTransferEndpoints();
 app.MapSettingsEndpoints();
 app.MapUpdateEndpoints();
@@ -436,7 +440,8 @@ static Share ToShare(Guid id, ShareRequest request) => new()
     ImageExtensions = MediaExtensionDefaults.Normalize(request.ImageExtensions),
     VideoExtensions = MediaExtensionDefaults.Normalize(request.VideoExtensions),
     ImageSubfolder = string.IsNullOrWhiteSpace(request.ImageSubfolder) ? null : request.ImageSubfolder.Trim(),
-    VideoSubfolder = string.IsNullOrWhiteSpace(request.VideoSubfolder) ? null : request.VideoSubfolder.Trim()
+    VideoSubfolder = string.IsNullOrWhiteSpace(request.VideoSubfolder) ? null : request.VideoSubfolder.Trim(),
+    RenamePresetId = request.RenamePresetId
 };
 
 public sealed record ShareRequest(
@@ -455,4 +460,5 @@ public sealed record ShareRequest(
     string[]? ImageExtensions = null,
     string[]? VideoExtensions = null,
     string? ImageSubfolder = null,
-    string? VideoSubfolder = null);
+    string? VideoSubfolder = null,
+    Guid? RenamePresetId = null);

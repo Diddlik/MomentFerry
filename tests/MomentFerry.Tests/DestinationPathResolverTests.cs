@@ -1,4 +1,5 @@
 using MomentFerry.Application.Services;
+using MomentFerry.Infrastructure;
 using MomentFerry.Core.Domain;
 
 namespace MomentFerry.Tests;
@@ -117,6 +118,78 @@ public sealed class DestinationPathResolverTests
         Assert.DoesNotContain("..", Path.GetRelativePath(destination.Path, video));
     }
 
+    [Fact]
+    public void Resolve_AppliesSourcePresetThenDestinationPreset()
+    {
+        var (resolver, source, destination, mediaEvent) = Scenario(null, null);
+        var sourcePreset = new RenamePreset { Name = "normalize", Template = "{captured:yyyyMMdd_HHmmss}" };
+        var destinationPreset = new RenamePreset { Name = "decorate", Template = "{name}_{camera}" };
+
+        source = CopyWithPreset(source, sourcePreset.Id);
+        destination = CopyWithPreset(destination, destinationPreset.Id);
+
+        var rename = new RenameContext(
+            new Dictionary<Guid, RenamePreset> { [sourcePreset.Id] = sourcePreset, [destinationPreset.Id] = destinationPreset },
+            FileNameTemplate.BuildCameraNames([new CameraMapping { From = "CPH2581", To = "OnePlus12" }]));
+
+        var media = MediaFileOf(source, MediaType.Image, "img20260216_123056.jpg", "OnePlus", "CPH2581");
+
+        var resolved = resolver.Resolve(mediaEvent, source, destination, media, rename);
+
+        Assert.Equal("20260810_120000_OnePlus12.jpg", Path.GetFileName(resolved));
+    }
+
+    [Fact]
+    public void Resolve_KeepsTheOriginalNameWhenNeitherShareHasAPreset()
+    {
+        var (resolver, source, destination, mediaEvent) = Scenario(null, null);
+        var media = MediaFileOf(source, MediaType.Image, "img20260216_123056.jpg");
+
+        var resolved = resolver.Resolve(mediaEvent, source, destination, media, RenameContext.Empty);
+
+        Assert.Equal("img20260216_123056.jpg", Path.GetFileName(resolved));
+    }
+
+    [Fact]
+    public void Resolve_AdvancesTheSequenceUntilTheNameIsFree()
+    {
+        var (_, source, destination, mediaEvent) = Scenario(null, null);
+        var preset = new RenamePreset { Name = "numbered", Template = "{captured:yyyyMMdd}_{seq:0000}" };
+        destination = CopyWithPreset(destination, preset.Id);
+        var rename = new RenameContext(
+            new Dictionary<Guid, RenamePreset> { [preset.Id] = preset },
+            FileNameTemplate.BuildCameraNames([]));
+
+        var targetDirectory = Path.Combine(destination.Path, "Italy 2026");
+        Directory.CreateDirectory(targetDirectory);
+        try
+        {
+            File.WriteAllText(Path.Combine(targetDirectory, "20260810_0001.jpg"), "taken");
+            var resolver = new DestinationPathResolver(new LocalFileSystemGateway());
+            var media = MediaFileOf(source, MediaType.Image, "whatever.jpg");
+
+            var resolved = resolver.Resolve(mediaEvent, source, destination, media, rename);
+
+            Assert.Equal("20260810_0002.jpg", Path.GetFileName(resolved));
+        }
+        finally
+        {
+            try { Directory.Delete(Path.GetDirectoryName(destination.Path)!, recursive: true); } catch { }
+        }
+    }
+
+    private static Share CopyWithPreset(Share share, Guid presetId) => new()
+    {
+        Id = share.Id,
+        Name = share.Name,
+        Path = share.Path,
+        Role = share.Role,
+        Owner = share.Owner,
+        ImageSubfolder = share.ImageSubfolder,
+        VideoSubfolder = share.VideoSubfolder,
+        RenamePresetId = presetId
+    };
+
     private static (DestinationPathResolver, Share, Share, MediaEvent) Scenario(
         string? imageSubfolder,
         string? videoSubfolder)
@@ -142,16 +215,23 @@ public sealed class DestinationPathResolverTests
         return (new DestinationPathResolver(), source, destination, mediaEvent);
     }
 
-    private static MediaFile MediaFileOf(Share source, MediaType mediaType, string name) => new()
-    {
-        SourceShareId = source.Id,
-        SourcePath = Path.Combine(source.Path, name),
-        OriginalName = name,
-        Size = 1,
-        Extension = Path.GetExtension(name),
-        MediaType = mediaType,
-        CapturedAt = new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero),
-        FirstSeenAt = DateTimeOffset.UnixEpoch,
-        LastSeenAt = DateTimeOffset.UnixEpoch
-    };
+    private static MediaFile MediaFileOf(
+        Share source,
+        MediaType mediaType,
+        string name,
+        string? cameraMake = null,
+        string? cameraModel = null) => new()
+        {
+            CameraMake = cameraMake,
+            CameraModel = cameraModel,
+            SourceShareId = source.Id,
+            SourcePath = Path.Combine(source.Path, name),
+            OriginalName = name,
+            Size = 1,
+            Extension = Path.GetExtension(name),
+            MediaType = mediaType,
+            CapturedAt = new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero),
+            FirstSeenAt = DateTimeOffset.UnixEpoch,
+            LastSeenAt = DateTimeOffset.UnixEpoch
+        };
 }

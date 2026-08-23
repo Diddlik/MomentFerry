@@ -12,6 +12,7 @@ public sealed class SafeTransferService(
     IFileSystemGateway fileSystem,
     IHashService hashService,
     DestinationPathResolver destinationPaths,
+    RenameContextFactory renameContexts,
     IClock clock)
 {
     public async Task<TransferExecutionResult> ExecuteAsync(
@@ -53,7 +54,8 @@ public sealed class SafeTransferService(
             throw new NotSupportedException("Archive retention is not implemented yet. Use Copy or SafeMove.");
 
         var operationId = Guid.NewGuid();
-        var desiredDestination = destinationPaths.Resolve(mediaEvent, sourceShare, destinationShare, mediaFile);
+        var rename = await renameContexts.LoadAsync(cancellationToken);
+        var desiredDestination = destinationPaths.Resolve(mediaEvent, sourceShare, destinationShare, mediaFile, rename);
         var stagingDirectory = Path.Combine(destinationShare.Path, ".momentferry-staging");
         DestinationPathResolver.EnsureInsideRoot(destinationShare.Path, Path.Combine(stagingDirectory, "probe"));
         fileSystem.EnsureDirectory(stagingDirectory);

@@ -140,7 +140,10 @@ public sealed class RoutingPreviewServiceTests : IDisposable
             events,
             groups,
             shares,
-            new DestinationPathResolver(),
+            new DestinationPathResolver(new LocalFileSystemGateway()),
+            new RenameContextFactory(
+                new SqliteRenamePresetRepository(factory),
+                new SqliteCameraMappingRepository(factory)),
             clock);
 
     private sealed class FixedMetadataExtractor(IClock clock) : IMediaMetadataExtractor

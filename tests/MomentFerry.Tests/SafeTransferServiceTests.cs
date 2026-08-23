@@ -214,7 +214,10 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             shares,
             fileSystem,
             new TestHashService(),
-            new DestinationPathResolver(),
+            new DestinationPathResolver(fileSystem),
+            new RenameContextFactory(
+                new SqliteRenamePresetRepository(connectionFactory),
+                new SqliteCameraMappingRepository(connectionFactory)),
             new FixedClock(capturedAt.AddHours(1)));
         var coordinator = new TransferCoordinator(operations, service);
 

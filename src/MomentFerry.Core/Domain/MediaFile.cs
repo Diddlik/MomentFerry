@@ -13,6 +13,11 @@ public sealed class MediaFile
     public string? TimestampSource { get; init; }
     public bool IsTimezoneInferred { get; init; }
     public string? Sha256 { get; init; }
+
+    // Persisted so filename templates can use the camera on later cycles, which reuse indexed
+    // metadata and therefore never run ExifTool again.
+    public string? CameraMake { get; init; }
+    public string? CameraModel { get; init; }
     public DateTimeOffset? SourceLastWriteAt { get; init; }
     public DateTimeOffset FirstSeenAt { get; init; }
     public DateTimeOffset LastSeenAt { get; init; }

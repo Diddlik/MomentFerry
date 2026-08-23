@@ -26,6 +26,9 @@ public sealed class Share
     /// <summary>Source role: extensions treated as videos. Empty falls back to the built-in list.</summary>
     public IReadOnlyList<string> VideoExtensions { get; init; } = Array.Empty<string>();
 
+    /// <summary>Filename template applied to media from (source role) or arriving at (destination role) this share.</summary>
+    public Guid? RenamePresetId { get; init; }
+
     /// <summary>Destination role: subfolder for images below the event folder. Empty keeps media together.</summary>
     public string? ImageSubfolder { get; init; }
 

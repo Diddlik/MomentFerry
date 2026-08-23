@@ -31,6 +31,7 @@ const TITLES = {
   events: ['Events', 'A capture-time window. Anything shot inside it lands in one folder.'],
   shares: ['Shares', 'The folders MomentFerry can see. Your sync tool keeps them filled.'],
   groups: ['Source groups', 'Which phones or cameras feed an event.'],
+  renaming: ['File naming', 'Templates that rename files on their way to the destination.'],
   preview: ['Routing preview', 'See where every file would go before a single byte moves.'],
   ops: ['Operations', 'Every copy, checksum, commit and deletion, in order.'],
   settings: ['Automation & safety', 'How often MomentFerry looks, and what it is allowed to do.'],
@@ -297,6 +298,7 @@ async function load() {
     operations = operationData;
     quarantinedOperations = quarantineData;
     renderAll();
+    await reloadRenaming();
   } catch (error) {
     $('status').textContent = 'Offline';
     $('pageSubtitle').textContent = error.message;
@@ -1148,6 +1150,7 @@ window.editShare = function (id) {
   $('videos').checked = (share.allowedMediaTypes || []).includes('Video');
   $('imageExtensions').value = ((share.imageExtensions || []).length ? share.imageExtensions : DEFAULT_IMAGE_EXTENSIONS).join('\n');
   $('videoExtensions').value = ((share.videoExtensions || []).length ? share.videoExtensions : DEFAULT_VIDEO_EXTENSIONS).join('\n');
+  $('sharePreset').value = share.renamePresetId || '';
   $('imageSubfolder').value = share.imageSubfolder || '';
   $('videoSubfolder').value = share.videoSubfolder || '';
   syncShareRoleFields();
@@ -1352,6 +1355,7 @@ async function reloadConfiguration() {
   renderRoutingSources();
   renderOnboarding();
   renderOverview();
+  await reloadRenaming();
 }
 
 async function reloadEvents() {
@@ -1473,6 +1477,7 @@ function resetShareForm() {
   $('videoExtensions').value = DEFAULT_VIDEO_EXTENSIONS.join('\n');
   $('imageSubfolder').value = '';
   $('videoSubfolder').value = '';
+  $('sharePreset').value = '';
   syncShareRoleFields();
   $('formMessage').textContent = '';
   $('folderBrowser').classList.add('hidden');
@@ -1584,6 +1589,208 @@ $('eventForm').addEventListener('submit', async (event) => {
   } catch (error) {
     $('eventMessage').textContent = error.message;
     $('eventMessage').className = 'message error';
+  }
+});
+
+/* File naming ---------------------------------------------------------- */
+
+let renamePresets = [];
+let cameraMappings = [];
+let previewTimer = null;
+
+async function reloadRenaming() {
+  [renamePresets, cameraMappings] = await Promise.all([
+    request('/api/v1/rename-presets'),
+    request('/api/v1/camera-mappings')
+  ]);
+  renderPresets();
+  renderMappings();
+  renderPresetChoices();
+  const badge = $('badgeRenaming');
+  if (badge) badge.textContent = renamePresets.length ? String(renamePresets.length) : '';
+}
+
+function renderPresetChoices() {
+  const select = $('sharePreset');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = `<option value="">No renaming</option>` +
+    renamePresets.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+  select.value = current;
+}
+
+function renderPresets() {
+  const list = $('presetList');
+  if (!list) return;
+  if (!renamePresets.length) {
+    list.innerHTML = '<div class="empty"><strong>No presets yet</strong>A preset is a filename template you can attach to a source or a destination.</div>';
+    return;
+  }
+
+  list.innerHTML = renamePresets.map(preset => {
+    const usedBy = shares.filter(s => s.renamePresetId === preset.id).map(s => s.name);
+    return `
+      <article class="list-row">
+        <div class="list-main">
+          <div class="list-heading">
+            <span class="list-title">${escapeHtml(preset.name)}</span>
+          </div>
+          <div class="list-path">${escapeHtml(preset.template)}</div>
+          <div class="list-meta">${usedBy.length ? `Used by ${escapeHtml(usedBy.join(', '))}` : 'Not attached to a share yet'}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-ghost" type="button" onclick="editPreset('${escapeHtml(preset.id)}')">Edit</button>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="tryPreset('${escapeHtml(preset.id)}')">Preview</button>
+          <button class="btn btn-sm btn-danger" type="button" onclick="deletePreset('${escapeHtml(preset.id)}')">Remove</button>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+function renderMappings() {
+  const list = $('mappingList');
+  if (!list) return;
+  if (!cameraMappings.length) {
+    list.innerHTML = '<div class="list-meta">No mappings yet. The reported model is used as-is.</div>';
+    return;
+  }
+
+  list.innerHTML = cameraMappings.map(mapping => `
+    <article class="list-row" style="padding:10px 14px">
+      <div class="list-main">
+        <div class="mono" style="font-size:12.5px">${escapeHtml(mapping.from)} → <b>${escapeHtml(mapping.to)}</b></div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-sm btn-danger" type="button" onclick="deleteMapping('${escapeHtml(mapping.id)}')">Remove</button>
+      </div>
+    </article>`).join('');
+}
+
+async function refreshRenamePreview() {
+  const target = $('renamePreview');
+  if (!target) return;
+  const sourceTemplate = $('previewSourceTemplate').value.trim();
+  const destinationTemplate = $('previewDestinationTemplate').value.trim();
+
+  if (!sourceTemplate && !destinationTemplate) {
+    target.innerHTML = '<div class="list-meta">Enter a template to see how files would be named.</div>';
+    return;
+  }
+
+  try {
+    const result = await request('/api/v1/rename-presets/preview', {
+      method: 'POST',
+      body: JSON.stringify({ sourceTemplate, destinationTemplate })
+    });
+    target.innerHTML = result.samples.map(sample => `
+      <div class="list-row" style="padding:9px 13px">
+        <div class="list-main">
+          <div class="mono" style="font-size:12px;color:var(--mut)">${escapeHtml(sample.original)}</div>
+          <div class="mono" style="font-size:13px"><b class="acc">${escapeHtml(sample.result)}</b></div>
+        </div>
+        <div class="list-meta">${sample.camera ? escapeHtml(sample.camera) : 'no camera'}</div>
+      </div>`).join('');
+  } catch (error) {
+    target.innerHTML = `<div class="message error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshRenamePreview, 250);
+}
+
+window.editPreset = function (id) {
+  const preset = renamePresets.find(x => x.id === id);
+  if (!preset) return;
+  $('presetId').value = preset.id;
+  $('presetName').value = preset.name;
+  $('presetTemplate').value = preset.template;
+  $('presetFormTitle').textContent = `Edit ${preset.name}`;
+  openForm('renaming', 'presetFormPanel');
+};
+
+window.tryPreset = function (id) {
+  const preset = renamePresets.find(x => x.id === id);
+  if (!preset) return;
+  $('previewDestinationTemplate').value = preset.template;
+  refreshRenamePreview();
+  $('renamePreview').scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.deletePreset = async function (id) {
+  const preset = renamePresets.find(x => x.id === id);
+  const usedBy = shares.filter(s => s.renamePresetId === id).map(s => s.name);
+  const warning = usedBy.length
+    ? `\n\n${usedBy.join(', ')} will stop renaming and keep original filenames.`
+    : '';
+  if (!preset || !confirm(`Remove preset “${preset.name}”?${warning}`)) return;
+  try {
+    await request(`/api/v1/rename-presets/${id}`, { method: 'DELETE' });
+    await reloadConfiguration();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.deleteMapping = async function (id) {
+  try {
+    await request(`/api/v1/camera-mappings/${id}`, { method: 'DELETE' });
+    await reloadRenaming();
+    refreshRenamePreview();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+function resetPresetForm() {
+  $('presetForm').reset();
+  $('presetId').value = '';
+  $('presetFormTitle').textContent = 'Add preset';
+  $('presetMessage').textContent = '';
+}
+
+$('newPreset').addEventListener('click', () => {
+  resetPresetForm();
+  openForm('renaming', 'presetFormPanel');
+});
+$('cancelPreset').addEventListener('click', () => {
+  resetPresetForm();
+  closeForm('presetFormPanel');
+});
+$('previewSourceTemplate').addEventListener('input', schedulePreview);
+$('previewDestinationTemplate').addEventListener('input', schedulePreview);
+
+$('presetForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const id = $('presetId').value;
+  const body = { name: $('presetName').value, template: $('presetTemplate').value };
+  try {
+    await request(id ? `/api/v1/rename-presets/${id}` : '/api/v1/rename-presets', {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(body)
+    });
+    resetPresetForm();
+    closeForm('presetFormPanel');
+    await reloadConfiguration();
+  } catch (error) {
+    $('presetMessage').textContent = error.message;
+    $('presetMessage').className = 'message error';
+  }
+});
+
+$('mappingForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const body = { from: $('mappingFrom').value, to: $('mappingTo').value };
+  try {
+    await request('/api/v1/camera-mappings', { method: 'POST', body: JSON.stringify(body) });
+    $('mappingForm').reset();
+    $('mappingMessage').textContent = '';
+    await reloadRenaming();
+    refreshRenamePreview();
+  } catch (error) {
+    $('mappingMessage').textContent = error.message;
+    $('mappingMessage').className = 'message error';
   }
 });
 

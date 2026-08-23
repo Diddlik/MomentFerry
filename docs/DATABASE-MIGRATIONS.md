@@ -52,6 +52,14 @@ Version 3 adds four nullable `shares` columns: `image_extensions_json`, `video_e
 
 Back up `/app/data` before upgrading. Version 1.2.0 and older refuse to open the version 3 database, so rollback requires restoring the pre-upgrade data backup.
 
+## Schema version 4
+
+Version 4 adds the `rename_presets` and `camera_mappings` tables, a nullable `shares.rename_preset_id`, and nullable `media_files.camera_make` / `media_files.camera_model`. Existing rows keep NULL, so filenames are unchanged until a preset is attached to a share.
+
+Camera columns are written by the routing cycle from ExifTool output and merged with `COALESCE`, so a later cycle that reuses indexed metadata never clears a previously discovered camera. Files indexed before this version gain their camera the next time their size or last-write time changes.
+
+Back up `/app/data` before upgrading. Version 1.3.x and older refuse to open the version 4 database, so rollback requires restoring the pre-upgrade data backup.
+
 ## Adding a migration
 
 Never edit the SQL of an already released migration to change the meaning of its version. Add a new migration instead.

@@ -4,7 +4,7 @@ namespace MomentFerry.Infrastructure.Persistence;
 
 public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connectionFactory) : IDatabaseInitializer
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private static readonly IReadOnlyList<SqliteMigration> Migrations =
     [
@@ -124,6 +124,32 @@ public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connection
             ALTER TABLE shares ADD COLUMN video_extensions_json TEXT NULL;
             ALTER TABLE shares ADD COLUMN image_subfolder TEXT NULL;
             ALTER TABLE shares ADD COLUMN video_subfolder TEXT NULL;
+            """),
+        new SqliteMigration(
+            4,
+            "rename-presets-and-camera-mappings",
+            """
+            CREATE TABLE IF NOT EXISTS rename_presets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                template TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS camera_mappings (
+                id TEXT PRIMARY KEY,
+                from_value TEXT NOT NULL,
+                to_value TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_camera_mappings_from ON camera_mappings(from_value COLLATE NOCASE);
+
+            ALTER TABLE shares ADD COLUMN rename_preset_id TEXT NULL;
+            ALTER TABLE media_files ADD COLUMN camera_make TEXT NULL;
+            ALTER TABLE media_files ADD COLUMN camera_model TEXT NULL;
             """)
     ];
 

@@ -6,6 +6,18 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.5.0] - 2026-08-23
+
+### Added
+
+- files can be renamed on their way to the destination using templates such as `{captured:yyyyMMdd_HHmmss}_{camera}_{seq:0000}`. Presets are defined once under **File naming** and attached to individual sources and destinations: the source preset normalizes the incoming name and the destination preset then shapes the stored name, so the two chain instead of competing;
+- a camera name mapping table rewrites the model a device reports into the name you want, for example CPH2581 to OnePlus12, which the `{camera}` token then uses;
+- the File naming view previews templates live against real indexed media, so a template can be checked before it is attached to a share and starts naming files.
+
+### Changed
+
+- database schema version 4 adds the rename preset and camera mapping tables, a rename preset reference on shares, and the camera make and model on indexed media. Existing shares keep their filenames unchanged until a preset is attached. Back up `/app/data` before updating, because version 1.3.x and older refuse to open a version 4 database.
+
 ## [1.4.0] - 2026-08-23
 
 ### Changed

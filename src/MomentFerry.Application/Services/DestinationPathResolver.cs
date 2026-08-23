@@ -1,14 +1,19 @@
+using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 
 namespace MomentFerry.Application.Services;
 
-public sealed class DestinationPathResolver
+public sealed class DestinationPathResolver(IFileSystemGateway? fileSystem = null)
 {
+    /// <summary>Upper bound on the sequence search, so a pathological folder cannot spin forever.</summary>
+    private const int MaxSequence = 100000;
+
     public string Resolve(
         MediaEvent mediaEvent,
         Share sourceShare,
         Share destinationShare,
-        MediaFile mediaFile)
+        MediaFile mediaFile,
+        RenameContext? rename = null)
     {
         var captured = mediaFile.CapturedAt ?? DateTimeOffset.UtcNow;
         var folder = mediaEvent.DestinationFolderTemplate
@@ -31,9 +36,75 @@ public sealed class DestinationPathResolver
                     .Select(SafeSegment));
 
         var root = Path.GetFullPath(destinationShare.Path);
-        var combined = Path.GetFullPath(Path.Combine(root, folder, mediaFolder, mediaFile.OriginalName));
+        var targetDirectory = Path.GetFullPath(Path.Combine(root, folder, mediaFolder));
+        var fileName = ResolveFileName(
+            mediaEvent,
+            sourceShare,
+            destinationShare,
+            mediaFile,
+            captured,
+            targetDirectory,
+            rename ?? RenameContext.Empty);
+
+        var combined = Path.GetFullPath(Path.Combine(targetDirectory, fileName));
         EnsureInsideRoot(root, combined);
         return combined;
+    }
+
+    /// <summary>
+    /// Applies the source preset first and then the destination preset to its result: the source
+    /// normalizes what arrives, the destination shapes what is stored.
+    /// </summary>
+    private string ResolveFileName(
+        MediaEvent mediaEvent,
+        Share sourceShare,
+        Share destinationShare,
+        MediaFile mediaFile,
+        DateTimeOffset captured,
+        string targetDirectory,
+        RenameContext rename)
+    {
+        var sourcePreset = rename.PresetFor(sourceShare);
+        var destinationPreset = rename.PresetFor(destinationShare);
+        var extension = Path.GetExtension(mediaFile.OriginalName);
+
+        if (sourcePreset is null && destinationPreset is null) return mediaFile.OriginalName;
+
+        var context = new FileNameContext(
+            Path.GetFileNameWithoutExtension(mediaFile.OriginalName),
+            captured,
+            FileNameTemplate.ResolveCamera(mediaFile.CameraMake, mediaFile.CameraModel, rename.CameraNames),
+            mediaFile.CameraMake,
+            mediaFile.CameraModel,
+            sourceShare.Name,
+            sourceShare.Owner,
+            mediaEvent.Name,
+            mediaEvent.Type);
+
+        var numbered = FileNameTemplate.UsesSequence(sourcePreset?.Template) ||
+                       FileNameTemplate.UsesSequence(destinationPreset?.Template);
+
+        for (var sequence = 1; sequence <= MaxSequence; sequence++)
+        {
+            var stem = context.Stem;
+            if (sourcePreset is not null)
+            {
+                stem = FileNameTemplate.Render(sourcePreset.Template, context, sequence);
+            }
+
+            if (destinationPreset is not null)
+            {
+                stem = FileNameTemplate.Render(destinationPreset.Template, context with { Stem = stem }, sequence);
+            }
+
+            var candidate = stem + extension;
+            // Without a sequence token there is nothing to vary, so the transfer's own conflict
+            // strategy stays responsible for resolving a collision.
+            if (!numbered || fileSystem is null) return candidate;
+            if (!fileSystem.FileExists(Path.Combine(targetDirectory, candidate))) return candidate;
+        }
+
+        return mediaFile.OriginalName;
     }
 
     public static void EnsureInsideRoot(string root, string candidate)

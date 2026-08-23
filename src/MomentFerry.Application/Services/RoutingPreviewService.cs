@@ -11,6 +11,7 @@ public sealed class RoutingPreviewService(
     ISourceGroupRepository sourceGroups,
     IShareRepository shares,
     DestinationPathResolver destinationPaths,
+    RenameContextFactory renameContexts,
     IClock clock)
 {
     /// <summary>
@@ -121,6 +122,7 @@ public sealed class RoutingPreviewService(
                 progress?.Invoke(new RoutingPreviewProgress("Reading metadata", completed, stableFiles.Length));
             });
 
+        var rename = await renameContexts.LoadAsync(cancellationToken);
         var groups = (await sourceGroups.ListAsync(cancellationToken))
             .ToDictionary(x => x.Id);
         var allShares = (await shares.ListAsync(cancellationToken))
@@ -155,6 +157,8 @@ public sealed class RoutingPreviewService(
                     ? existing?.IsTimezoneInferred ?? true
                     : extracted.TimeZoneInferred || extracted.CapturedAt is null,
                 Sha256 = existing?.Sha256,
+                CameraMake = extracted?.CameraMake ?? existing?.CameraMake,
+                CameraModel = extracted?.CameraModel ?? existing?.CameraModel,
                 SourceLastWriteAt = file.LastWriteUtc,
                 FirstSeenAt = existing?.FirstSeenAt ?? now,
                 LastSeenAt = now
@@ -200,7 +204,7 @@ public sealed class RoutingPreviewService(
                 continue;
             }
 
-            var destinationPath = destinationPaths.Resolve(matchedEvent, sourceShare, destinationShare, mediaFile);
+            var destinationPath = destinationPaths.Resolve(matchedEvent, sourceShare, destinationShare, mediaFile, rename);
             result.Add(new RoutingPreviewItem(
                 mediaFile,
                 RoutingPreviewState.Matched,
