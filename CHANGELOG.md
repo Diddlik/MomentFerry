@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.4.0] - 2026-08-23
+
+### Changed
+
+- the overview showed only one event when several were collecting at once. It now lists every active event as a compact row with its window, source group, destination and its own start/stop button, showing the first five and linking to the rest. A single active event keeps the previous detailed layout unchanged. Cycle counters stay below the list because they are automation-wide rather than per event.
+
 ## [1.3.1] - 2026-08-23
 
 ### Added

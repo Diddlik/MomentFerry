@@ -334,42 +334,24 @@ function renderOverview() {
   renderRecentOps();
 }
 
-function activeEvent() {
-  return events.find(x => x.status === 'Active')
-    || events.find(x => x.status === 'Planned')
-    || events[0]
-    || null;
+// Everything currently collecting. Falls back to planned, then to any event, so the card still
+// says something useful before the first event is started.
+function activeEvents() {
+  const active = events.filter(x => x.status === 'Active');
+  if (active.length) return active;
+  const planned = events.filter(x => x.status === 'Planned');
+  if (planned.length) return planned;
+  return events.length ? [events[0]] : [];
 }
 
-function renderRunningEvent() {
-  const body = $('ovEventBody');
-  const state = $('ovEventState');
-  const event = activeEvent();
+function activeEvent() {
+  return activeEvents()[0] || null;
+}
 
-  if (!event) {
-    state.className = 'pill';
-    state.textContent = 'None';
-    body.innerHTML = `
-      <div style="font-size:13px;color:var(--mut);line-height:1.6">
-        No event yet. An event is a capture-time window — everything shot inside it lands in one folder.
-      </div>
-      <div class="actions" style="margin-top:14px">
-        <button class="btn btn-acc" type="button" data-view="events">Create an event</button>
-      </div>`;
-    return;
-  }
-
-  const running = event.status === 'Active';
-  state.className = running ? 'pill pill-acc' : 'pill';
-  state.textContent = running ? 'Active' : event.status;
-
-  const groupName = groups.find(x => x.id === event.sourceGroupId)?.name || 'unknown group';
-  const destination = shares.find(x => x.id === event.destinationShareId);
-  const destinationPath = destinationPathFor(event, destination);
-  const window_ = `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'open'}`;
-  const mode = event.operationMode === 'Copy' ? 'Copy' : 'Safe Move';
+// Cycle counters are automation-wide, not per event, so they are rendered once below the event
+// list instead of per row, where they would read as per-event totals.
+function automationBlock() {
   const dry = appInfo.dryRun !== false;
-
   const cycleRunning = automationInfo?.cycleRunning === true;
   const matched = automationInfo ? (cycleRunning ? automationInfo.currentMatched : automationInfo.lastMatched) : 0;
   const moved = automationInfo
@@ -391,14 +373,7 @@ function renderRunningEvent() {
     </div>` : '';
   const scanDisabled = cycleRunning || scanRequestedAt || appInfo.automationEnabled === false;
 
-  body.innerHTML = `
-    <div class="row" style="align-items:baseline;gap:10px;margin-bottom:3px">
-      <div style="font-size:24px;font-weight:600;letter-spacing:-.02em">${escapeHtml(event.name)}</div>
-      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(event.type || 'Event')} · ${mode}</div>
-    </div>
-    <div class="mono" style="font-size:12px;color:var(--mut);margin-bottom:14px">
-      ${escapeHtml(window_)} · ${escapeHtml(groupName)} → ${escapeHtml(destinationPath)}
-    </div>
+  return `
     ${progress}
     <div class="stat-grid stat-grid-3">
       <div class="stat">
@@ -422,11 +397,101 @@ function renderRunningEvent() {
       <button class="btn" type="button" data-scan-now ${scanDisabled ? 'disabled' : ''}>
         ${cycleRunning ? 'Scanning…' : scanRequestedAt ? 'Queued…' : 'Scan now'}
       </button>
+    </div>`;
+}
+
+function eventSummary(event) {
+  return {
+    groupName: groups.find(x => x.id === event.sourceGroupId)?.name || 'unknown group',
+    destination: shares.find(x => x.id === event.destinationShareId),
+    window: `${formatDate(event.startAt)} → ${event.endAt ? formatDate(event.endAt) : 'open'}`,
+    mode: event.operationMode === 'Copy' ? 'Copy' : 'Safe Move'
+  };
+}
+
+// Compact rows keep many events scannable; the full destination path stays in the Events view.
+function eventRowList(list) {
+  const VISIBLE = 5;
+  const shown = list.slice(0, VISIBLE);
+  const rest = list.length - shown.length;
+
+  const rows = shown.map(event => {
+    const info = eventSummary(event);
+    return `
+      <div class="list-row" style="padding:11px 14px">
+        <div class="list-main">
+          <div class="list-heading" style="margin-bottom:3px">
+            <span class="list-title">${escapeHtml(event.name)}</span>
+            ${eventStatusPill(event.status)}
+          </div>
+          <div class="list-meta">${escapeHtml(info.window)} · ${escapeHtml(info.groupName)} → ${escapeHtml(info.destination?.name || 'missing destination')} · ${info.mode}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-ghost" type="button" data-event-toggle="${escapeHtml(event.id)}">
+            ${event.status === 'Active' ? 'Stop' : 'Start'}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const more = rest > 0
+    ? `<button class="btn btn-sm btn-ghost" type="button" data-view="events">Show ${formatNumber(rest)} more →</button>`
+    : '';
+
+  return `<div class="stack" style="gap:8px;margin-bottom:14px">${rows}${more}</div>`;
+}
+
+function eventHeadline(event) {
+  const info = eventSummary(event);
+  return `
+    <div class="row" style="align-items:baseline;gap:10px;margin-bottom:3px">
+      <div style="font-size:24px;font-weight:600;letter-spacing:-.02em">${escapeHtml(event.name)}</div>
+      <div style="font-size:12.5px;color:var(--mut)">${escapeHtml(event.type || 'Event')} · ${info.mode}</div>
     </div>
+    <div class="mono" style="font-size:12px;color:var(--mut);margin-bottom:14px">
+      ${escapeHtml(info.window)} · ${escapeHtml(info.groupName)} → ${escapeHtml(destinationPathFor(event, info.destination))}
+    </div>`;
+}
+
+function renderRunningEvent() {
+  const body = $('ovEventBody');
+  const state = $('ovEventState');
+  const kicker = $('ovEventKicker');
+  const list = activeEvents();
+
+  if (!list.length) {
+    kicker.textContent = 'Running event';
+    state.className = 'pill';
+    state.textContent = 'None';
+    body.innerHTML = `
+      <div style="font-size:13px;color:var(--mut);line-height:1.6">
+        No event yet. An event is a capture-time window — everything shot inside it lands in one folder.
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button class="btn btn-acc" type="button" data-view="events">Create an event</button>
+      </div>`;
+    return;
+  }
+
+  const multiple = list.length > 1;
+  const collecting = list[0].status === 'Active';
+  kicker.textContent = multiple ? 'Running events' : 'Running event';
+  state.className = collecting ? 'pill pill-acc' : 'pill';
+  state.textContent = multiple
+    ? `${formatNumber(list.length)} ${collecting ? 'active' : list[0].status.toLowerCase()}`
+    : (collecting ? 'Active' : list[0].status);
+
+  const toggle = multiple
+    ? ''
+    : `<button class="btn btn-acc" type="button" data-event-toggle="${escapeHtml(list[0].id)}">
+         ${collecting ? 'Stop event' : 'Start event'}
+       </button>`;
+
+  body.innerHTML = `
+    ${multiple ? eventRowList(list) : eventHeadline(list[0])}
+    ${automationBlock()}
     <div class="actions" style="margin-top:14px">
-      <button class="btn btn-acc" type="button" data-event-toggle="${escapeHtml(event.id)}">
-        ${running ? 'Stop event' : 'Start event'}
-      </button>
+      ${toggle}
       <button class="btn btn-ghost" type="button" data-view="preview">Preview routing</button>
     </div>`;
   renderNextScanCountdown();
