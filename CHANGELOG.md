@@ -6,6 +6,14 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.5.1] - 2026-08-23
+
+### Fixed
+
+- the File naming preview stayed empty until a template was typed. It now renders as soon as the view opens, and samples real filenames straight from the source shares when nothing has been indexed yet, so a fresh installation still shows how its own files would be named;
+- the share form's sync-tool dropdown stopped being filled in 1.5.0, because the new preset list defined a second `renderPresets` function that shadowed the existing one;
+- preview samples are numbered sequentially instead of every row showing `0001`, matching what a real run produces.
+
 ## [1.5.0] - 2026-08-23
 
 ### Added

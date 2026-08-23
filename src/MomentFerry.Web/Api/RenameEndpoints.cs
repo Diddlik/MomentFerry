@@ -47,14 +47,16 @@ public static class RenameEndpoints
             IMediaFileRepository mediaFiles,
             IShareRepository shares,
             ICameraMappingRepository cameraMappings,
+            ShareDiscoveryService discovery,
             CancellationToken ct) =>
         {
             var cameraNames = FileNameTemplate.BuildCameraNames(await cameraMappings.ListAsync(ct));
-            var samples = (await mediaFiles.ListRecentAsync(25, ct)).Take(4).ToArray();
-            var shareNames = (await shares.ListAsync(ct)).ToDictionary(x => x.Id, x => x);
-
+            var allShares = await shares.ListAsync(ct);
+            var shareNames = allShares.ToDictionary(x => x.Id, x => x);
             var results = new List<object>();
-            foreach (var sample in samples)
+
+            // Indexed media is preferred because it carries the capture time and camera the tokens need.
+            foreach (var sample in (await mediaFiles.ListRecentAsync(25, ct)).Take(4))
             {
                 shareNames.TryGetValue(sample.SourceShareId, out var share);
                 results.Add(RenderSample(
@@ -66,12 +68,41 @@ public static class RenameEndpoints
                     sample.CameraModel,
                     share?.Name ?? "Source",
                     share?.Owner,
-                    cameraNames));
+                    cameraNames,
+                    share?.Name ?? "indexed",
+                    results.Count + 1));
+            }
+
+            // Nothing indexed yet, so read real filenames straight off the source shares. These have no
+            // capture metadata behind them, so the file's last-write time stands in for the capture time.
+            if (results.Count == 0)
+            {
+                foreach (var share in allShares.Where(x => x.Enabled && x.Role is ShareRole.Source or ShareRole.Both))
+                {
+                    foreach (var file in discovery.Scan(share, 4))
+                    {
+                        results.Add(RenderSample(
+                            request,
+                            Path.GetFileNameWithoutExtension(file.FullPath),
+                            Path.GetExtension(file.FullPath),
+                            file.LastWriteUtc,
+                            null,
+                            null,
+                            share.Name,
+                            share.Owner,
+                            cameraNames,
+                            share.Name + " (not indexed yet)",
+                            results.Count + 1));
+                        if (results.Count >= 4) break;
+                    }
+
+                    if (results.Count >= 4) break;
+                }
             }
 
             if (results.Count == 0)
             {
-                // Nothing indexed yet: a synthetic sample still shows the shape of the result.
+                // No shares and no media: a worked example still shows the shape of the result.
                 results.Add(RenderSample(
                     request,
                     "img20260216_123056",
@@ -81,7 +112,9 @@ public static class RenameEndpoints
                     "CPH2581",
                     "Phone",
                     "Pavel",
-                    cameraNames));
+                    cameraNames,
+                    "example",
+                    1));
             }
 
             return Results.Ok(new { samples = results });
@@ -125,7 +158,9 @@ public static class RenameEndpoints
         string? cameraModel,
         string sourceName,
         string? owner,
-        IReadOnlyDictionary<string, string> cameraNames)
+        IReadOnlyDictionary<string, string> cameraNames,
+        string origin,
+        int sequence)
     {
         var context = new FileNameContext(
             stem,
@@ -141,19 +176,20 @@ public static class RenameEndpoints
         var renamed = context.Stem;
         if (!string.IsNullOrWhiteSpace(request.SourceTemplate))
         {
-            renamed = FileNameTemplate.Render(request.SourceTemplate, context, 1);
+            renamed = FileNameTemplate.Render(request.SourceTemplate, context, sequence);
         }
 
         if (!string.IsNullOrWhiteSpace(request.DestinationTemplate))
         {
-            renamed = FileNameTemplate.Render(request.DestinationTemplate, context with { Stem = renamed }, 1);
+            renamed = FileNameTemplate.Render(request.DestinationTemplate, context with { Stem = renamed }, sequence);
         }
 
         return new
         {
             original = stem + extension,
             result = renamed + extension,
-            camera = context.Camera
+            camera = context.Camera,
+            origin
         };
     }
 

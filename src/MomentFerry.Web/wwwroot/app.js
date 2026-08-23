@@ -1603,9 +1603,10 @@ async function reloadRenaming() {
     request('/api/v1/rename-presets'),
     request('/api/v1/camera-mappings')
   ]);
-  renderPresets();
+  renderRenamePresets();
   renderMappings();
   renderPresetChoices();
+  refreshRenamePreview();
   const badge = $('badgeRenaming');
   if (badge) badge.textContent = renamePresets.length ? String(renamePresets.length) : '';
 }
@@ -1619,7 +1620,7 @@ function renderPresetChoices() {
   select.value = current;
 }
 
-function renderPresets() {
+function renderRenamePresets() {
   const list = $('presetList');
   if (!list) return;
   if (!renamePresets.length) {
@@ -1672,23 +1673,24 @@ async function refreshRenamePreview() {
   const sourceTemplate = $('previewSourceTemplate').value.trim();
   const destinationTemplate = $('previewDestinationTemplate').value.trim();
 
-  if (!sourceTemplate && !destinationTemplate) {
-    target.innerHTML = '<div class="list-meta">Enter a template to see how files would be named.</div>';
-    return;
-  }
-
   try {
     const result = await request('/api/v1/rename-presets/preview', {
       method: 'POST',
       body: JSON.stringify({ sourceTemplate, destinationTemplate })
     });
+    const unchanged = !sourceTemplate && !destinationTemplate;
     target.innerHTML = result.samples.map(sample => `
       <div class="list-row" style="padding:9px 13px">
         <div class="list-main">
           <div class="mono" style="font-size:12px;color:var(--mut)">${escapeHtml(sample.original)}</div>
-          <div class="mono" style="font-size:13px"><b class="acc">${escapeHtml(sample.result)}</b></div>
+          <div class="mono" style="font-size:13px">${unchanged
+            ? '<span style="color:var(--mut)">unchanged until a template is set</span>'
+            : `<b class="acc">${escapeHtml(sample.result)}</b>`}</div>
         </div>
-        <div class="list-meta">${sample.camera ? escapeHtml(sample.camera) : 'no camera'}</div>
+        <div class="list-side">
+          <div class="list-meta">${escapeHtml(sample.origin || 'sample')}</div>
+          <div class="list-meta">${sample.camera ? escapeHtml(sample.camera) : 'no camera'}</div>
+        </div>
       </div>`).join('');
   } catch (error) {
     target.innerHTML = `<div class="message error">${escapeHtml(error.message)}</div>`;
