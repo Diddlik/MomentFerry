@@ -6,6 +6,10 @@ MomentFerry is a self-hosted media routing and collection service for synchroniz
 
 It watches filesystem shares, identifies photos and videos from metadata, matches them to capture-time events, and safely routes them into shared destination folders. MomentFerry is deliberately sync-tool agnostic: Resilio Sync, Syncthing, Nextcloud clients, FolderSync, SMB uploaders, rsync, or another tool may synchronize the folders. MomentFerry only works with the resulting filesystem paths.
 
+## How it works
+
+![MomentFerry workflow: synchronized source folders are matched by capture time, verified, and routed to a shared destination](docs/images/momentferry-workflow.png)
+
 ## Screenshots
 
 ### Overview
