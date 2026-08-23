@@ -6,6 +6,10 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+### Fixed
+
+- the language picker in the sidebar drew a second green box inside its row when focused and pushed its option list to the right edge. The row itself now carries the focus ring and the list reads left-aligned like every other menu.
+
 ## [1.6.0] - 2026-08-23
 
 ### Added
