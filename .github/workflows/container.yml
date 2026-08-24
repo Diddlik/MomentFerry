@@ -33,8 +33,13 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/diddlik/momentferry
+          # latest must come from tags only. is_default_branch is also true for a tag push, so both the
+          # branch run and the tag run used to push latest and whichever finished last won it. When the
+          # branch run won, latest carried the 0.0.0-dev stamp and the in-app updater waited forever for
+          # a release version that never arrived.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=edge,enable=${{ github.ref_type == 'branch' }}
             type=sha,prefix=sha-
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

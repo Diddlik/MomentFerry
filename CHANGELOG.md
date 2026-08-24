@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.9.1] - 2026-08-24
+
+### Fixed
+
+- updating from inside the app could end with "MomentFerry did not return with version x.y.z within three minutes" even though the container had updated correctly. Publishing a release ran two container builds, one for the branch and one for the tag, and both claimed the `latest` tag; whichever finished last won it. When the branch build won, `latest` carried a `0.0.0-dev.<run>` version stamp, so the running container never reported the released version and the updater kept offering the same update forever. `latest` now comes from release tags only, and `main` publishes `edge` instead.
+
 ## [1.9.0] - 2026-08-24
 
 ### Added
