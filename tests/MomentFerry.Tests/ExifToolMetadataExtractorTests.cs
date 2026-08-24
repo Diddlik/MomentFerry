@@ -49,10 +49,10 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     [Fact]
     public async Task SamsungVideoWithoutModel_UsesTheMarketingNameFromTheAuthorField()
     {
-        // moov/udta of a Galaxy S25 recording: no Make, no Model, "SM-S931B" in the smta box and
+        // moov/udta of a Galaxy S25 recording: no Make, no Model, "SM-S931B" in the Samsung maker note and
         // "Galaxy S25" in auth. The video must end up named like a photo from the same phone.
         var extractor = StubReturning("""
-            [{"SourceFile":"x.mp4","ModelName":"SM-S931B","Author":"Galaxy S25","MediaCreateDate":"2026:08:07 14:21:56"}]
+            [{"SourceFile":"x.mp4","SamsungModel":"SM-S931B","Author":"Galaxy S25","MediaCreateDate":"2026:08:07 14:21:56"}]
             """);
 
         var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
@@ -64,7 +64,7 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     public async Task SamsungVideoWithoutAuthor_FallsBackToTheModelCode()
     {
         var extractor = StubReturning("""
-            [{"SourceFile":"x.mp4","ModelName":"SM-S931B","MediaCreateDate":"2026:08:07 14:21:56"}]
+            [{"SourceFile":"x.mp4","SamsungModel":"SM-S931B","MediaCreateDate":"2026:08:07 14:21:56"}]
             """);
 
         var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
@@ -88,7 +88,7 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     [Fact]
     public async Task AuthorAlone_IsNotTreatedAsACamera()
     {
-        // Without the Samsung box the author field is free text and could be a person's name.
+        // Without the Samsung model the author field is free text and could be a person's name.
         var extractor = StubReturning("""
             [{"SourceFile":"x.mp4","Author":"Anna Schmidt","MediaCreateDate":"2026:08:07 14:21:56"}]
             """);

@@ -40,7 +40,7 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 "-Model",
                 "-AndroidManufacturer",
                 "-AndroidModel",
-                "-ModelName",
+                "-SamsungModel",
                 "-Author",
                 "-ImageWidth",
                 "-ImageHeight",
@@ -102,17 +102,18 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
 
     /// <summary>
     /// Phone recordings usually carry no Make/Model at all. Android writes com.android.model into the
-    /// QuickTime keys, and Samsung writes its model code into the smta box plus the marketing device
-    /// name ("Galaxy S25") into the user-data author field. The author field is only trusted when the
-    /// Samsung box proves who wrote the file, because everywhere else it is free text that could name
-    /// a person. Preferring the marketing name keeps a video named like a photo from the same phone.
+    /// QuickTime keys, which ExifTool reports as AndroidModel. Samsung instead writes its model code
+    /// into a maker note (SamsungModel, "SM-S921B") and the marketing device name into the user-data
+    /// author field (QuickTime:Author, "Galaxy S24"). Author is only trusted once SamsungModel proves
+    /// who wrote the file, because everywhere else it is free text that could name a person.
+    /// Preferring the marketing name keeps a video named like a photo from the same phone.
     /// </summary>
     private static string? ResolveModel(JsonElement root)
     {
         var model = GetString(root, "Model") ?? GetString(root, "AndroidModel");
         if (!string.IsNullOrWhiteSpace(model)) return model;
 
-        var samsungModel = GetString(root, "ModelName");
+        var samsungModel = GetString(root, "SamsungModel");
         if (string.IsNullOrWhiteSpace(samsungModel)) return null;
 
         return GetString(root, "Author") ?? samsungModel;
