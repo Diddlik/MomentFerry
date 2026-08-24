@@ -6,6 +6,10 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+### Fixed
+
+- MomentFerry could delete a file it had produced itself. When a routed file finds its way back onto a source share — a sync task mirroring the destination folder, a shared album, a phone subscribing to the destination — it was indexed as new media, matched the same event, found an identical file at the destination and, under the Safe Move to existing duplicate policy, deleted the source without a word. Where source and destination are mirrored, that deletion travels back onto the destination copy. Such a file is now held in **Needs your decision**, naming the destination its content was already routed to, and the source is kept. A genuine duplicate contributed by a second device is held the same way: the content hash cannot tell the two cases apart, and holding a file can be undone while deleting it cannot.
+
 ## [1.7.2] - 2026-08-24
 
 ### Fixed

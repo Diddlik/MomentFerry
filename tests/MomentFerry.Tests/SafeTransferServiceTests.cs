@@ -129,6 +129,44 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SafeMove_WhenItsOwnOutputReturnsToTheSource_HoldsItInsteadOfDeletingIt()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+
+        // Something mirrors the destination back into the source share, under the name MomentFerry
+        // gave the file. It arrives as a new media file with identical content.
+        var mirrorDirectory = Path.Combine(SourceDirectory, "mirrored");
+        Directory.CreateDirectory(mirrorDirectory);
+        var returnedPath = Path.Combine(mirrorDirectory, Path.GetFileName(first.Operation.DestinationPath!));
+        await File.WriteAllBytesAsync(returnedPath, fixture.SourceBytes);
+        var returned = new MediaFile
+        {
+            Id = Guid.NewGuid(),
+            SourceShareId = fixture.Media.SourceShareId,
+            SourcePath = returnedPath,
+            OriginalName = Path.GetFileName(returnedPath),
+            Size = fixture.SourceBytes.Length,
+            Extension = Path.GetExtension(returnedPath),
+            MediaType = MediaType.Image,
+            CapturedAt = fixture.Media.CapturedAt,
+            TimestampSource = fixture.Media.TimestampSource,
+            FirstSeenAt = fixture.Media.FirstSeenAt,
+            LastSeenAt = fixture.Media.LastSeenAt
+        };
+        await fixture.MediaFiles.UpsertAsync(returned);
+
+        var second = await fixture.Service.ExecuteAsync(returned.Id, fixture.Event.Id);
+
+        Assert.Equal(MediaOperationState.Quarantined, second.Operation.State);
+        Assert.False(second.SourceDeleted);
+        Assert.Contains("own output", second.Operation.LastError);
+        Assert.True(File.Exists(returnedPath));
+        Assert.True(File.Exists(first.Operation.DestinationPath!));
+    }
+
+    [Fact]
     public async Task Coordinator_ConcurrentCalls_ExecuteExactlyOneTransfer()
     {
         var fixture = await CreateFixtureAsync();
@@ -235,7 +273,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             new FixedClock(capturedAt.AddHours(1)));
         var coordinator = new TransferCoordinator(operations, service);
 
-        return new Fixture(service, coordinator, operations, fileSystem, media, mediaEvent, sourceBytes);
+        return new Fixture(service, coordinator, operations, mediaFiles, fileSystem, media, mediaEvent, sourceBytes);
     }
 
     private static bool PathEquals(string left, string right) =>
@@ -248,6 +286,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
         SafeTransferService Service,
         TransferCoordinator Coordinator,
         TrackingOperationRepository Operations,
+        IMediaFileRepository MediaFiles,
         TrackingFileSystemGateway FileSystem,
         MediaFile Media,
         MediaEvent Event,
@@ -322,6 +361,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.GetAsync(id, cancellationToken);
         public Task<MediaOperation?> GetIncompleteByMediaFileAsync(Guid mediaFileId, CancellationToken cancellationToken = default) =>
             inner.GetIncompleteByMediaFileAsync(mediaFileId, cancellationToken);
+        public Task<MediaOperation?> FindCompletedByDestinationHashAsync(string destinationHash, Guid excludedMediaFileId, CancellationToken cancellationToken = default) =>
+            inner.FindCompletedByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
         public Task<bool> HasTerminalOperationAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
             inner.HasTerminalOperationAsync(mediaFileId, eventId, cancellationToken);
 

@@ -234,6 +234,30 @@ public sealed class SafeTransferService(
         MediaEvent mediaEvent,
         CancellationToken cancellationToken)
     {
+        // A source file whose content MomentFerry already wrote to a destination is its own output
+        // arriving back on a source share. Deleting it as a duplicate of itself hides the loop that
+        // brought it there, and where source and destination are mirrored the deletion travels back
+        // onto the destination copy. Hold it for a human instead.
+        var ownOutput = await operations.FindCompletedByDestinationHashAsync(
+            sourceHash,
+            operation.MediaFileId,
+            cancellationToken);
+        if (ownOutput is not null)
+        {
+            var held = Transition(
+                operation,
+                MediaOperationState.Quarantined,
+                destinationPath: existingPath,
+                sourceHash: sourceHash,
+                destinationHash: sourceHash,
+                lastError:
+                    $"This file is MomentFerry's own output returning to a source share: its content was " +
+                    $"already routed to '{ownOutput.DestinationPath}'. The source was kept, because something " +
+                    "is copying the destination back into the source.");
+            await operations.UpsertAsync(held, cancellationToken);
+            return new TransferExecutionResult(held, false, false, held.LastError);
+        }
+
         if (mediaEvent.DuplicateStrategy == DuplicateStrategy.KeepBoth)
             return null;
 
