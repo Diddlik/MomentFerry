@@ -6,6 +6,8 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.0] - 2026-08-24
+
 ### Added
 
 - a **Maintenance** view. *Read metadata again* clears the mark that makes routing reuse what it already knows about a file, so a corrected extractor reaches media that is already indexed — without it, fixes to capture time or camera only ever apply to new arrivals. *Forget missing files* drops index entries whose source is gone, keeping any entry an operation refers to so the record that a file was verified survives. *Compact database* hands reclaimed pages back to the disk. And the operation history can now expire: set a retention window in days and each full reconcile removes finished operations older than that, or leave it at zero to keep everything. Anything still waiting for a decision is never removed, however old it is.
