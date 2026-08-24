@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.7.2] - 2026-08-24
+
+### Fixed
+
+- copying a file was up to 160 times slower than the storage allows. The destination was opened with write-through, which on Linux makes every 128 KB block wait for the disk to confirm it; the same 100 MiB measured 1.3 MB/s that way against 208 MB/s when flushed once at the end. MomentFerry now writes normally and forces the file to disk once when it is complete, before it reads the copy back to verify it, so nothing about the safety of a transfer changes. On the installation this was found on, routing 3.1 GiB took 1 hour 42 minutes.
+
 ## [1.7.1] - 2026-08-24
 
 ### Fixed
