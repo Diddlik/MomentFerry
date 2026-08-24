@@ -177,6 +177,11 @@ public sealed class SafeTransferService(
                 return new TransferExecutionResult(operation, false, true, operation.LastError);
             }
 
+            // Only after the destination is verified byte for byte: a stamped timestamp must never be
+            // the reason a transfer is judged complete, and a filesystem that refuses the stamp must not
+            // undo a good copy.
+            var stampMessage = ApplyCaptureTimestamp(finalDestination, mediaFile.CapturedAt!.Value);
+
             operation = Transition(
                 operation,
                 MediaOperationState.DestinationCommitted,
@@ -196,7 +201,7 @@ public sealed class SafeTransferService(
 
             operation = Transition(operation, MediaOperationState.Completed, completedAt: clock.UtcNow);
             await operations.UpsertAsync(operation, cancellationToken);
-            return new TransferExecutionResult(operation, deleted, true, null);
+            return new TransferExecutionResult(operation, deleted, true, stampMessage);
         }
         catch (OperationCanceledException)
         {
@@ -283,6 +288,24 @@ public sealed class SafeTransferService(
         var completed = Transition(committed, MediaOperationState.Completed, completedAt: clock.UtcNow);
         await operations.UpsertAsync(completed, cancellationToken);
         return new TransferExecutionResult(completed, sourceDeleted, false, "Identical destination already existed and was verified by SHA-256.");
+    }
+
+    /// <summary>
+    /// Sets the routed file's timestamps to the capture time so galleries that sort by file date match
+    /// the order the media was shot in. Returns the reason when the filesystem refused, because a
+    /// verified copy is worth keeping even without its stamp.
+    /// </summary>
+    private string? ApplyCaptureTimestamp(string path, DateTimeOffset capturedAt)
+    {
+        try
+        {
+            fileSystem.SetFileTimestampsUtc(path, capturedAt);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentOutOfRangeException or PlatformNotSupportedException)
+        {
+            return $"Destination is verified, but its capture timestamp could not be applied: {ex.Message}";
+        }
     }
 
     private static void ValidateRoute(

@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.7.1] - 2026-08-24
+
+### Fixed
+
+- a routed file carried the time it was copied as its modification date, which reordered every gallery that sorts by file date rather than by embedded metadata. The destination is now stamped with the capture time once it is verified. Linux offers no way to set a file's creation date, so the container stamps the modification date only; a filesystem that refuses the stamp no longer costs you the verified copy. Files routed by earlier versions keep their copy time and can be corrected with `exiftool "-FileModifyDate<DateTimeOriginal" <folder>`.
+
 ## [1.7.0] - 2026-08-24
 
 ### Added

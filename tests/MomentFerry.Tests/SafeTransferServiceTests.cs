@@ -61,6 +61,20 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SafeMove_StampsTheDestinationWithTheCaptureTime()
+    {
+        var fixture = await CreateFixtureAsync();
+
+        var result = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+
+        Assert.Equal(MediaOperationState.Completed, result.Operation.State);
+        Assert.Null(result.Message);
+        Assert.Equal(
+            fixture.Media.CapturedAt!.Value.UtcDateTime,
+            File.GetLastWriteTimeUtc(result.Operation.DestinationPath!));
+    }
+
+    [Fact]
     public async Task SafeMove_WhenStagingHashDiffers_QuarantinesAndPreservesSource()
     {
         var fixture = await CreateFixtureAsync();
@@ -268,6 +282,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
         public DateTimeOffset GetLastWriteTimeUtc(string path) => inner.GetLastWriteTimeUtc(path);
         public Stream OpenRead(string path) => inner.OpenRead(path);
         public void MoveFile(string source, string destination) => inner.MoveFile(source, destination);
+        public void SetFileTimestampsUtc(string path, DateTimeOffset timestamp) => inner.SetFileTimestampsUtc(path, timestamp);
         public void EnsureDirectory(string path) => inner.EnsureDirectory(path);
 
         public async Task CopyFileAsync(string source, string destination, CancellationToken cancellationToken = default)

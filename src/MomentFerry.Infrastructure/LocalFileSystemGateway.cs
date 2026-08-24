@@ -117,6 +117,16 @@ public sealed class LocalFileSystemGateway(IRuntimeSettingsStore? settingsStore 
         File.Move(sourcePath, destinationPath, overwrite: false);
     }
 
+    public void SetFileTimestampsUtc(string path, DateTimeOffset timestamp)
+    {
+        var utc = timestamp.UtcDateTime;
+        File.SetLastWriteTimeUtc(path, utc);
+
+        // Linux offers no way to set a file's birth time, so the Docker deployment carries the capture
+        // time in the last-write time only. Windows development runs stamp both.
+        if (OperatingSystem.IsWindows()) File.SetCreationTimeUtc(path, utc);
+    }
+
     public void DeleteFile(string path) => File.Delete(path);
 
     public void EnsureDirectory(string path) => Directory.CreateDirectory(path);

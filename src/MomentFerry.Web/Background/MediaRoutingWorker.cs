@@ -360,9 +360,10 @@ public sealed class MediaRoutingWorker(
                 {
                     executed++;
                     logger.LogInformation(
-                        "Auto-routing completed {Source}: {State}",
+                        "Auto-routing completed {Source}: {State}{Detail}",
                         item.MediaFile.SourcePath,
-                        result.Result?.Operation.State);
+                        result.Result?.Operation.State,
+                        result.Message is null ? string.Empty : $" — {result.Message}");
                 }
                 else
                 {

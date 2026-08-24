@@ -11,6 +11,12 @@ public interface IFileSystemGateway
     Stream OpenRead(string path);
     Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default);
     void MoveFile(string sourcePath, string destinationPath);
+
+    /// <summary>
+    /// Stamps a routed file with its capture time. Without it the destination carries the copy time,
+    /// which reorders every gallery that sorts by file date instead of by embedded metadata.
+    /// </summary>
+    void SetFileTimestampsUtc(string path, DateTimeOffset timestamp);
     void DeleteFile(string path);
     void EnsureDirectory(string path);
 }
