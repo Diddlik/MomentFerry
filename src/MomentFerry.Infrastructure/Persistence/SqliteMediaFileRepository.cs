@@ -66,6 +66,48 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
     }
 
+    public async Task<int> ClearMetadataStampAsync(Guid? shareId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = shareId is null
+            ? "UPDATE media_files SET source_last_write_at_utc = NULL;"
+            : "UPDATE media_files SET source_last_write_at_utc = NULL WHERE source_share_id = $shareId;";
+        if (shareId is not null) command.Parameters.AddWithValue("$shareId", shareId.Value.ToString("D"));
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<int> DeleteUnreferencedAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0) return 0;
+
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DELETE FROM media_files
+            WHERE id = $id
+              AND NOT EXISTS (SELECT 1 FROM operations WHERE media_file_id = media_files.id);
+            """;
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$id";
+        command.Parameters.Add(parameter);
+
+        var removed = 0;
+        foreach (var id in ids)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            parameter.Value = id.ToString("D");
+            removed += await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        transaction.Commit();
+        return removed;
+    }
+
     public async Task UpsertAsync(MediaFile mediaFile, CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);

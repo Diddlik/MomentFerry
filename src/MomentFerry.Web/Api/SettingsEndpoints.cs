@@ -31,6 +31,8 @@ public static class SettingsEndpoints
                 return Results.BadRequest(new { error = "MaxParallelMetadataReads must be between 1 and 8." });
             if (request.MinimumFreeSpaceReserveBytes is < 0 or > 1099511627776)
                 return Results.BadRequest(new { error = "MinimumFreeSpaceReserveBytes must be between 0 and 1099511627776." });
+            if (request.OperationRetentionDays is < 0 or > 3650)
+                return Results.BadRequest(new { error = "OperationRetentionDays must be between 0 and 3650." });
 
             var current = await store.GetAsync(ct);
             if (current.DryRun && !request.DryRun &&
@@ -50,7 +52,8 @@ public static class SettingsEndpoints
                 request.MaxParallelMetadataReads,
                 request.AllowFilesystemTimestampFallback,
                 request.MinimumFreeSpaceReserveBytes ?? current.MinimumFreeSpaceReserveBytes,
-                request.AutomaticImageUpdatesEnabled ?? current.AutomaticImageUpdatesEnabled), ct);
+                request.AutomaticImageUpdatesEnabled ?? current.AutomaticImageUpdatesEnabled,
+                request.OperationRetentionDays ?? current.OperationRetentionDays), ct);
 
             return Results.Ok(updated);
         });
@@ -75,6 +78,7 @@ public static class SettingsEndpoints
                 settings.AllowFilesystemTimestampFallback,
                 settings.MinimumFreeSpaceReserveBytes,
                 settings.AutomaticImageUpdatesEnabled,
+                settings.OperationRetentionDays,
                 automation = automationStatus.Snapshot()
             });
         });
@@ -182,6 +186,7 @@ public sealed record RuntimeSettingsRequest(
     bool AllowFilesystemTimestampFallback,
     long? MinimumFreeSpaceReserveBytes = null,
     bool? AutomaticImageUpdatesEnabled = null,
+    int? OperationRetentionDays = null,
     string? LiveModeConfirmation = null);
 
 public sealed record StorageShareStatus(

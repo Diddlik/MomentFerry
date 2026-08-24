@@ -9,6 +9,7 @@ public sealed class MediaRoutingWorker(
     IMediaEventRepository events,
     ISourceGroupRepository sourceGroups,
     RoutingPreviewService routing,
+    IMediaOperationRepository operations,
     ShareDiscoveryService discovery,
     TransferCoordinator transfers,
     IRuntimeSettingsStore runtimeSettings,
@@ -106,6 +107,30 @@ public sealed class MediaRoutingWorker(
                 {
                     status.CycleFailed(clock.UtcNow, ex.Message);
                     logger.LogError(ex, "Unhandled error in MomentFerry automation cycle");
+                }
+            }
+
+            // Retention rides on the periodic sweep rather than on a schedule of its own: it is cheap,
+            // it only ever touches finished operations, and tying it to the full walk means it cannot
+            // run while a cycle is mid-transfer.
+            if (fullReconcileDue && settings.OperationRetentionDays > 0)
+            {
+                try
+                {
+                    var removed = await operations.DeleteFinishedBeforeAsync(
+                        clock.UtcNow.AddDays(-settings.OperationRetentionDays),
+                        stoppingToken);
+                    if (removed > 0)
+                    {
+                        logger.LogInformation(
+                            "Removed {Count} finished operations older than {Days} days",
+                            removed,
+                            settings.OperationRetentionDays);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException)
+                {
+                    logger.LogWarning(ex, "Operation retention pass failed");
                 }
             }
 

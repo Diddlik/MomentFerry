@@ -68,6 +68,9 @@
         <button class="nav-item" type="button" data-view="settings">
           <span>Automation &amp; safety</span><span class="nav-badge"></span>
         </button>
+        <button class="nav-item" type="button" data-view="maintenance">
+          <span>Maintenance</span><span class="nav-badge"></span>
+        </button>
         <button class="nav-item" type="button" data-view="updates">
           <span>Image updates</span><span class="nav-badge"></span>
         </button>
@@ -476,6 +479,58 @@
           <div style="font-size:11.5px;color:var(--mut);margin-bottom:8px">Why a file was skipped, held, or routed. Kept in memory, so a restart clears it.</div>
           <div id="logList"></div>
         </div>
+      </section>
+
+      <!-- MAINTENANCE ------------------------------------------------- -->
+      <section class="view hidden" id="view-maintenance">
+        <div class="card row" style="padding:14px 18px;font-size:12.5px;color:var(--mut)">
+          <span id="maintenanceSummary">Loading database status…</span>
+          <button class="btn btn-sm btn-ghost push" type="button" id="refreshMaintenance">Refresh</button>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Read metadata again</div>
+          </div>
+          <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Routing reuses what it already knows about a file while its size and last-write time are unchanged. Clear that mark to make the next cycle read capture time and camera from the files again. Nothing is deleted, and what is on record stays until a fresh read replaces it.</div>
+          <div class="row">
+            <select id="maintenanceShare" style="min-width:260px;width:auto"></select>
+            <button class="btn" type="button" id="reindexMetadata">Read metadata again</button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Forget missing files</div>
+            </div>
+            <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Removes index entries whose source file is gone. Entries that carry an operation are kept, because deleting them would take the proof that the file was verified with it.</div>
+            <button class="btn btn-ghost" type="button" id="forgetMissing">Forget missing files</button>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Compact database</div>
+            </div>
+            <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">SQLite keeps deleted pages for reuse. Compacting hands that space back to the disk. Safe, but it rewrites the whole file, so do it when nothing is transferring.</div>
+            <button class="btn btn-ghost" type="button" id="compactDatabase">Compact database</button>
+          </div>
+        </div>
+
+        <div class="card card-amber">
+          <div class="card-head">
+            <div class="card-title" style="color:var(--ambtxt)">Operation history</div>
+          </div>
+          <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">The history records what was copied where and which checksums matched. It is your evidence, so nothing expires unless you say so. Anything still waiting for a decision is never removed, however old it is.</div>
+          <div class="row">
+            <label for="retentionDays" style="font-size:12.5px;color:var(--mut)">Remove finished operations older than</label>
+            <input id="retentionDays" type="number" min="0" max="3650" step="1" style="width:110px" />
+            <span style="font-size:12.5px;color:var(--mut)">days · 0 keeps them for good</span>
+            <button class="btn btn-sm" type="button" id="saveRetention">Save</button>
+            <button class="btn btn-sm btn-ghost" type="button" id="pruneNow">Remove now</button>
+          </div>
+        </div>
+        <p class="message" id="maintenanceMessage"></p>
       </section>
 
       <!-- AUTOMATION & SAFETY ----------------------------------------- -->

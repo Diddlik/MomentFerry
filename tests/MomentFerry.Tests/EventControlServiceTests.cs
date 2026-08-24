@@ -130,6 +130,12 @@ public sealed class EventControlServiceTests
         public Task<MediaFile?> GetBySourceAsync(Guid sourceShareId, string sourcePath, CancellationToken cancellationToken = default)
             => Task.FromResult<MediaFile?>(null);
 
+        public Task<int> ClearMetadataStampAsync(Guid? shareId, CancellationToken cancellationToken = default)
+            => Task.FromResult(0);
+
+        public Task<int> DeleteUnreferencedAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default)
+            => Task.FromResult(0);
+
         public Task UpsertAsync(MediaFile mediaFile, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 

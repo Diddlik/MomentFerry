@@ -105,6 +105,7 @@ public sealed class JsonRuntimeSettingsStore(
         ReconciliationIntervalSeconds = Math.Clamp(settings.ReconciliationIntervalSeconds, 15, 86400),
         MaxFilesPerSharePerCycle = Math.Clamp(settings.MaxFilesPerSharePerCycle, 1, 2000),
         MaxParallelMetadataReads = Math.Clamp(settings.MaxParallelMetadataReads, 1, 8),
-        MinimumFreeSpaceReserveBytes = Math.Clamp(settings.MinimumFreeSpaceReserveBytes, 0, 1L * 1024 * 1024 * 1024 * 1024)
+        MinimumFreeSpaceReserveBytes = Math.Clamp(settings.MinimumFreeSpaceReserveBytes, 0, 1L * 1024 * 1024 * 1024 * 1024),
+        OperationRetentionDays = Math.Clamp(settings.OperationRetentionDays, 0, 3650)
     };
 }

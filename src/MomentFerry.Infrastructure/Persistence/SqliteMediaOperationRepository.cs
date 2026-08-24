@@ -164,6 +164,25 @@ Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default)
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<int> DeleteFinishedBeforeAsync(
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM operations
+            WHERE state IN ($completed, $ignored, $failed)
+              AND completed_at_utc IS NOT NULL
+              AND completed_at_utc < $cutoff;
+            """;
+        command.Parameters.AddWithValue("$completed", (int)MediaOperationState.Completed);
+        command.Parameters.AddWithValue("$ignored", (int)MediaOperationState.Ignored);
+        command.Parameters.AddWithValue("$failed", (int)MediaOperationState.Failed);
+        command.Parameters.AddWithValue("$cutoff", cutoff.UtcDateTime.ToString("O"));
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task UpsertAsync(MediaOperation operation, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow.ToString("O");

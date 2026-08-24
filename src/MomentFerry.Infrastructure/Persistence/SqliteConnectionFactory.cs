@@ -6,10 +6,14 @@ public sealed class SqliteConnectionFactory
 {
     private readonly string _connectionString;
 
+    /// <summary>Where the database lives, for maintenance that works on the file rather than on rows.</summary>
+    public string DatabasePath { get; }
+
     public SqliteConnectionFactory(string databasePath)
     {
         var fullPath = System.IO.Path.GetFullPath(databasePath);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
+        DatabasePath = fullPath;
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = fullPath,

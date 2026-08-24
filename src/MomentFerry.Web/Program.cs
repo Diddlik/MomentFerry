@@ -53,7 +53,8 @@ var runtimeDefaults = new MomentFerryRuntimeSettings(
     builder.Configuration.GetValue("MomentFerry:Automation:MaxParallelMetadataReads", 2),
     builder.Configuration.GetValue("MomentFerry:Automation:AllowFilesystemTimestampFallback", false),
     builder.Configuration.GetValue("MomentFerry:MinimumFreeSpaceReserveBytes", LocalFileSystemGateway.DefaultMinimumFreeSpaceReserveBytes),
-    builder.Configuration.GetValue("MomentFerry:Updates:Automatic", false));
+    builder.Configuration.GetValue("MomentFerry:Updates:Automatic", false),
+    builder.Configuration.GetValue("MomentFerry:OperationRetentionDays", 0));
 var runtimeSettingsPath = builder.Configuration["MomentFerry:RuntimeSettingsPath"] ?? "data/runtime-settings.json";
 builder.Services.AddSingleton<IRuntimeSettingsStore>(
     new JsonRuntimeSettingsStore(runtimeSettingsPath, runtimeDefaults));
@@ -384,6 +385,7 @@ app.MapRoutingEndpoints();
 app.MapRenameEndpoints();
 app.MapTransferEndpoints();
 app.MapSettingsEndpoints();
+app.MapMaintenanceEndpoints();
 app.MapUpdateEndpoints();
 
 app.Run();

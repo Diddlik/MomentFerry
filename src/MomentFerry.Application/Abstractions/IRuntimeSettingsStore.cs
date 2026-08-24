@@ -8,7 +8,10 @@ public sealed record MomentFerryRuntimeSettings(
     int MaxParallelMetadataReads = 2,
     bool AllowFilesystemTimestampFallback = false,
     long MinimumFreeSpaceReserveBytes = 512L * 1024L * 1024L,
-    bool AutomaticImageUpdatesEnabled = false);
+    bool AutomaticImageUpdatesEnabled = false,
+    // 0 keeps the operation history for good. Anything still waiting for a decision is never removed,
+    // however old it is, so a retention window cannot bury an unresolved file.
+    int OperationRetentionDays = 0);
 
 public interface IRuntimeSettingsStore
 {

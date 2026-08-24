@@ -448,6 +448,9 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
         public Task<bool> HasTerminalOperationAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
             inner.HasTerminalOperationAsync(mediaFileId, eventId, cancellationToken);
 
+        public Task<int> DeleteFinishedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken = default) =>
+            inner.DeleteFinishedBeforeAsync(cutoff, cancellationToken);
+
         public async Task UpsertAsync(MediaOperation operation, CancellationToken cancellationToken = default)
         {
             if (!_failureConsumed && FailOnceOnState == operation.State)

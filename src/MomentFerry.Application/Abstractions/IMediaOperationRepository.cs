@@ -33,5 +33,13 @@ Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default);
         DateTimeOffset supersededAt,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Removes finished operations that completed before the cutoff. Only terminal states go: anything
+    /// still waiting for a decision stays regardless of age.
+    /// </summary>
+    Task<int> DeleteFinishedBeforeAsync(
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default);
+
     Task UpsertAsync(MediaOperation operation, CancellationToken cancellationToken = default);
 }

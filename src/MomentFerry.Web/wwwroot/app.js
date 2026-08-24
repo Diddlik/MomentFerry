@@ -36,6 +36,7 @@ const TITLES = () => ({
   preview: [t('Routing preview'), t('See where every file would go before a single byte moves.')],
   ops: [t('Operations'), t('Every copy, checksum, commit and deletion, in order.')],
   settings: [t('Automation & safety'), t('How often MomentFerry looks, and what it is allowed to do.')],
+  maintenance: [t('Maintenance'), t('Housekeeping for the index and the operation history.')],
   updates: [t('Image updates'), t('Stable releases from GHCR, applied by an isolated companion.')],
   setup: [t('Finish setup'), t('One last check before anything moves.')]
 });
@@ -254,6 +255,7 @@ function setView(view) {
 
   if (view === 'setup') renderSetup();
   if (view === 'ops') refreshLogs().catch(() => { });
+  if (view === 'maintenance') refreshMaintenance().catch(() => { });
   if (location.hash.slice(1) !== view) history.replaceState(null, '', `#${view}`);
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
@@ -1031,6 +1033,40 @@ function renderLogs() {
 async function refreshLogs() {
   logEntries = await request(`/api/v1/logs?limit=200&level=${encodeURIComponent($('logLevel').value)}`);
   renderLogs();
+}
+
+/* Maintenance ------------------------------------------------------------ */
+
+let maintenanceInfo = null;
+
+async function refreshMaintenance() {
+  maintenanceInfo = await request('/api/v1/maintenance/');
+  const settings = await request('/api/v1/settings');
+  $('retentionDays').value = settings.operationRetentionDays ?? 0;
+
+  const total = Object.values(maintenanceInfo.operations || {}).reduce((sum, n) => sum + n, 0);
+  $('maintenanceSummary').textContent = t(
+    '{{size}} database · {{files}} indexed files · {{operations}} operations',
+    {
+      size: formatBytes(maintenanceInfo.databaseBytes),
+      files: formatNumber(maintenanceInfo.indexedMediaFiles),
+      operations: formatNumber(total)
+    });
+
+  $('maintenanceShare').innerHTML =
+    `<option value="">${t('All shares')}</option>` +
+    shares.map(share => `<option value="${share.id}">${escapeHtml(share.name)}</option>`).join('');
+}
+
+async function runMaintenance(key, label, action) {
+  $('maintenanceMessage').textContent = '';
+  try {
+    const message = await runBackgroundTask(key, label, 'maintenance', action);
+    $('maintenanceMessage').textContent = message;
+    await refreshMaintenance();
+  } catch (error) {
+    $('maintenanceMessage').textContent = error.message;
+  }
 }
 
 /* Quarantine ------------------------------------------------------------ */
@@ -1936,6 +1972,68 @@ $('cancelGroup').addEventListener('click', () => closeForm('groupFormPanel'));
 $('newEvent').addEventListener('click', () => { resetEventForm(); openForm('events', 'eventFormPanel'); });
 $('cancelEvent').addEventListener('click', () => closeForm('eventFormPanel'));
 $('previewRouting').addEventListener('click', previewRouting);
+$('refreshMaintenance').addEventListener('click', () => refreshMaintenance().catch(error => {
+  $('maintenanceMessage').textContent = error.message;
+}));
+
+$('reindexMetadata').addEventListener('click', () => {
+  const shareId = $('maintenanceShare').value;
+  const share = shares.find(x => x.id === shareId);
+  runMaintenance('reindex-metadata', t('Read metadata again'), async () => {
+    const query = shareId ? `?shareId=${encodeURIComponent(shareId)}` : '';
+    const result = await request(`/api/v1/maintenance/reindex-metadata${query}`, { method: 'POST' });
+    return t('{{count}} files will have their metadata read again on the next cycle.', {
+      count: formatNumber(result.affected)
+    }) + (share ? ` (${share.name})` : '');
+  });
+});
+
+$('forgetMissing').addEventListener('click', () => {
+  if (!confirm(t('Remove index entries whose source file no longer exists?'))) return;
+  runMaintenance('forget-missing', t('Forget missing files'), async () => {
+    const result = await request('/api/v1/maintenance/forget-missing', { method: 'POST' });
+    return t('{{removed}} of {{missing}} missing entries removed, {{kept}} kept because they carry an operation.', {
+      removed: formatNumber(result.removed),
+      missing: formatNumber(result.missing),
+      kept: formatNumber(result.keptForHistory)
+    });
+  });
+});
+
+$('compactDatabase').addEventListener('click', () => {
+  runMaintenance('compact-database', t('Compact database'), async () => {
+    const result = await request('/api/v1/maintenance/compact', { method: 'POST' });
+    return t('Database compacted, {{size}} reclaimed.', { size: formatBytes(Math.max(0, result.reclaimed || 0)) });
+  });
+});
+
+$('saveRetention').addEventListener('click', () => {
+  const days = Number($('retentionDays').value);
+  runMaintenance('save-retention', t('Save'), async () => {
+    const settings = await request('/api/v1/settings');
+    await request('/api/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ ...settings, operationRetentionDays: days })
+    });
+    return days > 0
+      ? t('Finished operations older than {{count}} days are removed on each full reconcile.', { count: formatNumber(days) })
+      : t('The operation history is kept for good.');
+  });
+});
+
+$('pruneNow').addEventListener('click', () => {
+  const days = Number($('retentionDays').value);
+  if (!(days > 0)) {
+    $('maintenanceMessage').textContent = t('Set a retention window of at least one day first.');
+    return;
+  }
+  if (!confirm(t('Remove finished operations older than {{count}} days now? This cannot be undone.', { count: formatNumber(days) }))) return;
+  runMaintenance('prune-operations', t('Remove now'), async () => {
+    const result = await request(`/api/v1/maintenance/prune-operations?olderThanDays=${days}`, { method: 'POST' });
+    return t('{{count}} finished operations removed.', { count: formatNumber(result.removed) });
+  });
+});
+
 $('refreshOperations').addEventListener('click', refreshOperations);
 $('refreshLogs').addEventListener('click', refreshLogs);
 $('logLevel').addEventListener('change', refreshLogs);
