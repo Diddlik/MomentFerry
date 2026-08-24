@@ -13,6 +13,7 @@ let groups = [];
 let events = [];
 let operations = [];
 let quarantinedOperations = [];
+let logEntries = [];
 
 /* Filled in by settings.js */
 let automationInfo = null;
@@ -252,6 +253,7 @@ function setView(view) {
   $('pageSubtitle').textContent = subtitle;
 
   if (view === 'setup') renderSetup();
+  if (view === 'ops') refreshLogs().catch(() => { });
   if (location.hash.slice(1) !== view) history.replaceState(null, '', `#${view}`);
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
@@ -1004,6 +1006,29 @@ function renderOperations() {
     </div>`;
 }
 
+/* Activity log ----------------------------------------------------------- */
+
+function renderLogs() {
+  const target = $('logList');
+  if (!logEntries.length) {
+    target.innerHTML = `<div class="table-empty">${t('Nothing logged yet.')}</div>`;
+    return;
+  }
+
+  target.innerHTML = logEntries.map(entry => `
+    <div class="divided-row">
+      <div style="min-width:0">
+        <div style="font-size:12.5px;color:var(--txt)">${escapeHtml(entry.message)}</div>
+        <div class="mono" style="font-size:11px;color:var(--mut);margin-top:2px">${escapeHtml(formatDate(entry.at))} · ${escapeHtml(entry.level)} · ${escapeHtml(entry.category)}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function refreshLogs() {
+  logEntries = await request(`/api/v1/logs?limit=200&level=${encodeURIComponent($('logLevel').value)}`);
+  renderLogs();
+}
+
 /* Quarantine ------------------------------------------------------------ */
 
 function renderQuarantine() {
@@ -1021,11 +1046,11 @@ function renderQuarantine() {
     <div class="divided-row">
       <div style="min-width:0">
         <div class="mono" style="font-size:12px;color:var(--txt)" title="${escapeHtml(operation.sourcePath)}">${escapeHtml(baseName(operation.sourcePath))}</div>
-        <div style="font-size:11.5px;color:var(--mut);margin-top:2px">${escapeHtml(operation.lastError || t('No reason recorded.'))}</div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:2px">${escapeHtml(t(operation.state))} · ${escapeHtml(operation.lastError || t('No reason recorded.'))}</div>
       </div>
       <div class="card-actions">
         <button class="btn btn-sm btn-ghost" type="button" ${appInfo.dryRun ? `disabled title="${escapeHtml(t('Dry Run is enabled'))}"` : ''} onclick="retryQuarantine('${operation.id}')">${t('Retry')}</button>
-        <button class="btn btn-sm btn-ghost" type="button" onclick="dismissQuarantine('${operation.id}')">${t('Dismiss safely')}</button>
+        ${operation.state === 'Quarantined' ? `<button class="btn btn-sm btn-ghost" type="button" onclick="dismissQuarantine('${operation.id}')">${t('Dismiss safely')}</button>` : ''}
       </div>
     </div>`).join('');
 }
@@ -1862,6 +1887,8 @@ $('newEvent').addEventListener('click', () => { resetEventForm(); openForm('even
 $('cancelEvent').addEventListener('click', () => closeForm('eventFormPanel'));
 $('previewRouting').addEventListener('click', previewRouting);
 $('refreshOperations').addEventListener('click', refreshOperations);
+$('refreshLogs').addEventListener('click', refreshLogs);
+$('logLevel').addEventListener('change', refreshLogs);
 $('refreshQuarantine').addEventListener('click', refreshQuarantine);
 $('dismissOnboarding').addEventListener('click', () => {
   localStorage.setItem('momentferry.onboarding.dismissed', 'true');

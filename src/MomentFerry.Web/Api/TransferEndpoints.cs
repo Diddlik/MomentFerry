@@ -1,5 +1,6 @@
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Application.Services;
+using MomentFerry.Web.Diagnostics;
 using System.Text;
 
 namespace MomentFerry.Web.Api;
@@ -26,14 +27,39 @@ public static class TransferEndpoints
                 $"momentferry-audit-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.csv");
         });
 
+        // Both states block their media file from being routed again and are only resolved by a user
+        // decision, so they are reported together as the "needs your decision" list.
+        app.MapGet("/api/v1/logs", (
+            int? limit,
+            string? level,
+            ActivityLog log) =>
+        {
+            if (!Enum.TryParse<LogLevel>(level ?? nameof(LogLevel.Information), true, out var minimumLevel))
+                return Results.BadRequest(new { error = "Unknown log level." });
+
+            return Results.Ok(log.Recent(Math.Clamp(limit ?? 200, 1, 500), minimumLevel));
+        });
+
         app.MapGet("/api/v1/quarantine", async (
             int? limit,
             IMediaOperationRepository repository,
             CancellationToken ct) =>
-            Results.Ok(await repository.ListByStateAsync(
+        {
+            var max = Math.Clamp(limit ?? 200, 1, 2000);
+            var quarantined = await repository.ListByStateAsync(
                 MomentFerry.Core.Domain.MediaOperationState.Quarantined,
-                Math.Clamp(limit ?? 200, 1, 2000),
-                ct)));
+                max,
+                ct);
+            var retryPending = await repository.ListByStateAsync(
+                MomentFerry.Core.Domain.MediaOperationState.RetryPending,
+                max,
+                ct);
+            return Results.Ok(quarantined
+                .Concat(retryPending)
+                .OrderByDescending(x => x.StartedAt)
+                .Take(max)
+                .ToArray());
+        });
 
         app.MapPost("/api/v1/quarantine/{id:guid}/dismiss", async (
             Guid id,

@@ -6,6 +6,18 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.7.0] - 2026-08-24
+
+### Added
+
+- an Activity log on the Operations view shows why MomentFerry did what it did, filtered by everything, warnings or errors only. It mirrors the application's own log records into memory and serves them over `GET /api/v1/logs`, so a stuck file can be diagnosed in the browser instead of in the container log. The ring holds 500 entries by default and is cleared by a restart; the durable record remains the operation history and the audit CSV;
+- every automation cycle now reports its trigger, duration and tally: `full reconcile` versus the number of paths the filesystem watcher reported. If a share only ever produces full reconciles, its changes are not reaching the watcher, which is what makes routing appear slow.
+
+### Fixed
+
+- an operation left in `RetryPending` was invisible and self-blocking. Interrupting a transfer before the destination is committed puts it there by design, but the state kept its media file unroutable on every following cycle while the "Needs your decision" card listed only quarantined items, so the file silently never moved again. Both states are now listed together and offer Retry; Dismiss stays limited to quarantined items;
+- the routing worker no longer swallows the reason a matched file was not routed, and startup recovery names every operation it leaves in a non-terminal state instead of only counting them.
+
 ## [1.6.1] - 2026-08-23
 
 ### Fixed

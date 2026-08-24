@@ -460,6 +460,22 @@
           <button class="btn btn-ghost" type="button" id="refreshOperations">Refresh</button>
           <a class="button-link btn-ghost" href="/docs/">Open API documentation</a>
         </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Activity log</div>
+            <div class="card-actions">
+              <select id="logLevel" style="width:auto">
+                <option value="Information">Everything</option>
+                <option value="Warning">Warnings and errors</option>
+                <option value="Error">Errors only</option>
+              </select>
+              <button class="btn btn-sm btn-ghost" type="button" id="refreshLogs">Refresh</button>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--mut);margin-bottom:8px">Why a file was skipped, held, or routed. Kept in memory, so a restart clears it.</div>
+          <div id="logList"></div>
+        </div>
       </section>
 
       <!-- AUTOMATION & SAFETY ----------------------------------------- -->

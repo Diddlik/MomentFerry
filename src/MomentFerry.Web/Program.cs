@@ -9,10 +9,16 @@ using MomentFerry.Infrastructure.Persistence;
 using MomentFerry.Infrastructure.Runtime;
 using MomentFerry.Web.Api;
 using MomentFerry.Web.Background;
+using MomentFerry.Web.Diagnostics;
 using MomentFerry.Web.Integrations;
 using MomentFerry.Web.Updates;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var activityLog = new ActivityLog(
+    Math.Clamp(builder.Configuration.GetValue("MomentFerry:ActivityLog:Capacity", 500), 50, 5000));
+builder.Services.AddSingleton(activityLog);
+builder.Logging.AddProvider(new ActivityLogProvider(activityLog));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -98,6 +104,18 @@ if (recoveryReport.Total > 0)
         recoveryReport.Completed,
         recoveryReport.Quarantined,
         recoveryReport.RetryPending);
+
+    // Counts alone leave an operator guessing which files are stuck and why, and these states are only
+    // cleared by an explicit retry, so name each one.
+    foreach (var item in recoveryReport.Items.Where(x =>
+        x.State is not (MediaOperationState.Completed or MediaOperationState.Ignored)))
+    {
+        app.Logger.LogWarning(
+            "MomentFerry recovery left operation {OperationId} in {State}: {Reason}",
+            item.OperationId,
+            item.State,
+            item.Message ?? "no reason recorded");
+    }
 }
 
 app.UseDefaultFiles();

@@ -70,10 +70,25 @@ public sealed class MediaRoutingWorker(
                 status.CycleStarted(clock.UtcNow);
                 try
                 {
+                    var startedAt = clock.UtcNow;
                     var result = await ProcessCycleAsync(
                         settings,
                         fullReconcileDue ? null : pending.TargetedPaths,
                         stoppingToken);
+                    // The trigger and duration are the only way to tell a watcher-driven pickup from
+                    // one that waited for the periodic sweep, which is what makes routing look slow.
+                    logger.LogInformation(
+                        "Automation cycle finished ({Trigger}) over {Shares} shares in {Seconds:F1}s: " +
+                        "{Matched} matched, {Executed} routed, {Skipped} skipped, {Errors} errors",
+                        fullReconcileDue
+                            ? "full reconcile"
+                            : $"watcher paths: {pending.TargetedPaths.Sum(x => x.Value.Count)}",
+                        result.SourceShares,
+                        (clock.UtcNow - startedAt).TotalSeconds,
+                        result.Matched,
+                        result.Executed,
+                        result.Skipped,
+                        result.Errors);
                     status.CycleCompleted(
                         clock.UtcNow,
                         result.SourceShares,
@@ -352,6 +367,13 @@ public sealed class MediaRoutingWorker(
                 else
                 {
                     skipped++;
+                    // Silent here would leave a blocked file invisible: a RetryPending or Quarantined
+                    // operation keeps its media file unroutable on every following cycle.
+                    logger.LogInformation(
+                        "Auto-routing skipped {Source} for event {Event}: {Reason}",
+                        item.MediaFile.SourcePath,
+                        item.Event!.Name,
+                        result.Message ?? "no reason reported");
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
