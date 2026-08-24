@@ -8,6 +8,7 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ### Fixed
 
+- a camera mapping did not apply to videos that pad the model out. A OnePlus recording reports `OnePlus  CPH2581 23mm` — maker, model code and lens in one string — so a table keyed on `CPH2581` never matched and the filename carried the whole raw string. A mapping key is now also matched inside the reported model, and the focal length no longer needs an entry of its own. The longest key wins when several match.
 - the `{camera}` token stayed empty for phone videos. A Galaxy S25 recording carries no Make or Model at all: the model code sits in a Samsung maker note and the device name "Galaxy S25" in the author field, and other Android phones use the `com.android` keys instead. On the installation this was found on, 483 of 497 indexed videos had no camera recorded while photos from the same phone were named correctly. All of these are now read, and a video is named like a photo from the same device. The author field is only trusted on a recording that identifies itself as Samsung, because elsewhere it is free text that could name a person.
 
 ## [1.9.1] - 2026-08-24

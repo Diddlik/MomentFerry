@@ -93,6 +93,36 @@ public sealed class FileNameTemplateTests
     }
 
     [Fact]
+    public void ResolveCamera_MatchesTheMappingInsideAPaddedVideoModel()
+    {
+        // A OnePlus recording reports "OnePlus  CPH2581 23mm": maker, model code and the lens in one
+        // string, with a double space. The focal length changes with the lens, the model code does not.
+        var names = FileNameTemplate.BuildCameraNames([new CameraMapping { From = "CPH2581", To = "OnePlus12" }]);
+
+        Assert.Equal("OnePlus12", FileNameTemplate.ResolveCamera(null, "OnePlus  CPH2581 23mm", names));
+        Assert.Equal("OnePlus12", FileNameTemplate.ResolveCamera(null, "OnePlus  CPH2581 15mm", names));
+    }
+
+    [Fact]
+    public void ResolveCamera_PrefersTheLongestMatchingMapping()
+    {
+        var names = FileNameTemplate.BuildCameraNames([
+            new CameraMapping { From = "CPH", To = "OnePlus-any" },
+            new CameraMapping { From = "CPH2581", To = "OnePlus12" }
+        ]);
+
+        Assert.Equal("OnePlus12", FileNameTemplate.ResolveCamera(null, "OnePlus  CPH2581 23mm", names));
+    }
+
+    [Fact]
+    public void ResolveCamera_CollapsesPaddingWhenNothingMapsTheModel()
+    {
+        var names = FileNameTemplate.BuildCameraNames([]);
+
+        Assert.Equal("OnePlus CPH2581 23mm", FileNameTemplate.ResolveCamera(null, "OnePlus  CPH2581 23mm", names));
+    }
+
+    [Fact]
     public void ResolveCamera_KeepsTheReportedModelWhenNothingMapsIt()
     {
         var names = FileNameTemplate.BuildCameraNames([]);

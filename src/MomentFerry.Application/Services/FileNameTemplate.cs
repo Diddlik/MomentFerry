@@ -96,9 +96,16 @@ public static partial class FileNameTemplate
     [GeneratedRegex(@"([_\-. ])\1+")]
     private static partial Regex CollapsePattern();
 
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespacePattern();
+
     /// <summary>
     /// Applies the configured camera mappings to the raw model, falling back to the make when a file
-    /// reports no model at all.
+    /// reports no model at all. Video containers pad the model out with the maker and the lens, for
+    /// example "OnePlus  CPH2581 23mm", so a mapping key is also matched inside the reported model:
+    /// the model code is the stable part, while the focal length changes with the lens in use. The
+    /// longest key wins, so a specific mapping beats one that is merely contained in it; equal lengths
+    /// fall back to key order so the result never depends on how the table was loaded.
     /// </summary>
     public static string? ResolveCamera(
         string? cameraMake,
@@ -108,8 +115,17 @@ public static partial class FileNameTemplate
         var raw = string.IsNullOrWhiteSpace(cameraModel) ? cameraMake : cameraModel;
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
-        var trimmed = raw.Trim();
-        return cameraNames.TryGetValue(trimmed, out var mapped) ? mapped : trimmed;
+        var trimmed = WhitespacePattern().Replace(raw.Trim(), " ");
+        if (cameraNames.TryGetValue(trimmed, out var mapped)) return mapped;
+
+        foreach (var mapping in cameraNames
+                     .OrderByDescending(x => x.Key.Length)
+                     .ThenBy(x => x.Key, StringComparer.Ordinal))
+        {
+            if (trimmed.Contains(mapping.Key, StringComparison.OrdinalIgnoreCase)) return mapping.Value;
+        }
+
+        return trimmed;
     }
 
     public static IReadOnlyDictionary<string, string> BuildCameraNames(IEnumerable<CameraMapping> mappings)
