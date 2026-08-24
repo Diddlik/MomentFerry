@@ -38,6 +38,10 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 "-TrackCreateDate",
                 "-Make",
                 "-Model",
+                "-AndroidManufacturer",
+                "-AndroidModel",
+                "-ModelName",
+                "-Author",
                 "-ImageWidth",
                 "-ImageHeight",
                 "-Duration",
@@ -58,7 +62,10 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
             var output = await outputTask;
             var error = await errorTask;
 
-            if (process.ExitCode != 0)
+            // A non-zero exit still carries usable JSON when ExifTool merely warned, for example about a
+            // tag this build does not know. Losing every field over a warning would be worse than the
+            // warning itself.
+            if (process.ExitCode != 0 && !output.TrimStart().StartsWith('['))
             {
                 return Empty(error.Length == 0 ? $"ExifTool exited with code {process.ExitCode}." : error.Trim());
             }
@@ -76,8 +83,8 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 capturedAt,
                 source,
                 inferred,
-                GetString(root, "Make"),
-                GetString(root, "Model"),
+                GetString(root, "Make") ?? GetString(root, "AndroidManufacturer"),
+                ResolveModel(root),
                 GetInt32(root, "ImageWidth"),
                 GetInt32(root, "ImageHeight"),
                 GetDouble(root, "Duration"),
@@ -91,6 +98,24 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
         {
             return Empty(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Phone recordings usually carry no Make/Model at all. Android writes com.android.model into the
+    /// QuickTime keys, and Samsung writes its model code into the smta box plus the marketing device
+    /// name ("Galaxy S25") into the user-data author field. The author field is only trusted when the
+    /// Samsung box proves who wrote the file, because everywhere else it is free text that could name
+    /// a person. Preferring the marketing name keeps a video named like a photo from the same phone.
+    /// </summary>
+    private static string? ResolveModel(JsonElement root)
+    {
+        var model = GetString(root, "Model") ?? GetString(root, "AndroidModel");
+        if (!string.IsNullOrWhiteSpace(model)) return model;
+
+        var samsungModel = GetString(root, "ModelName");
+        if (string.IsNullOrWhiteSpace(samsungModel)) return null;
+
+        return GetString(root, "Author") ?? samsungModel;
     }
 
     private static (DateTimeOffset? Value, string? Source, bool Inferred) ResolveTimestamp(

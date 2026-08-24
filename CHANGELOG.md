@@ -6,6 +6,10 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+### Fixed
+
+- the `{camera}` token stayed empty for phone videos. A Galaxy S25 recording carries no Make or Model at all: the model code sits in a Samsung-specific box and the device name "Galaxy S25" in the author field, and other Android phones use the `com.android` keys instead. On the installation this was found on, 483 of 497 indexed videos had no camera recorded while photos from the same phone were named correctly. All of these are now read, and a video is named like a photo from the same device. The author field is only trusted on a recording that identifies itself as Samsung, because elsewhere it is free text that could name a person.
+
 ## [1.9.1] - 2026-08-24
 
 ### Fixed
