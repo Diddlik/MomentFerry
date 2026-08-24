@@ -34,6 +34,89 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task QuickTimeDateWithoutOffset_IsReadAsUtc()
+    {
+        // Verified against the real file: exiftool reports "2026:04:21 12:00:28" for a recording made
+        // at 14:00:28 local. QuickTime stores these fields in UTC. Reading them as the machine's own
+        // local time shifted every video by the container's offset.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","MediaCreateDate":"2026:04:21 12:00:28"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal(new DateTimeOffset(2026, 4, 21, 12, 0, 28, TimeSpan.Zero), metadata.CapturedAt);
+        Assert.Equal("MediaCreateDate", metadata.TimestampSource);
+        Assert.False(metadata.TimeZoneInferred);
+    }
+
+    [Fact]
+    public async Task CreationDateWins_BecauseItCarriesTheRecordingOffset()
+    {
+        // A OnePlus recording: MediaCreateDate is UTC, CreationDate is the same moment in the zone it
+        // was filmed in.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","CreationDate":"2024:12:01 18:50:08+01:00","MediaCreateDate":"2024:12:01 17:50:20"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal("CreationDate", metadata.TimestampSource);
+        Assert.Equal(TimeSpan.FromHours(1), metadata.CapturedAt!.Value.Offset);
+        Assert.Equal(
+            new DateTimeOffset(2024, 12, 1, 17, 50, 8, TimeSpan.Zero),
+            metadata.CapturedAt!.Value.ToUniversalTime());
+    }
+
+    [Fact]
+    public async Task SamsungOffset_ExpressesTheSameInstantInTheRecordingZone()
+    {
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","MediaCreateDate":"2026:04:21 12:00:28","SamsungAndroidUtcOffset":"+0200"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal(TimeSpan.FromHours(2), metadata.CapturedAt!.Value.Offset);
+        Assert.Equal(14, metadata.CapturedAt!.Value.Hour);
+        Assert.Equal(
+            new DateTimeOffset(2026, 4, 21, 12, 0, 28, TimeSpan.Zero),
+            metadata.CapturedAt!.Value.ToUniversalTime());
+        Assert.False(metadata.TimeZoneInferred);
+    }
+
+    [Fact]
+    public async Task PhotoWithoutOffset_StillFallsBackToTheShareZoneAndSaysSo()
+    {
+        // A photo timestamp really is local wall-clock time with nothing to anchor it, so the share
+        // zone stays an assumption here and must keep being reported as one.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.jpg","DateTimeOriginal":"2026:04:21 14:00:28"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.jpg", MediaType.Image);
+
+        Assert.True(metadata.TimeZoneInferred);
+        Assert.Equal(14, metadata.CapturedAt!.Value.Hour);
+        Assert.Equal(TimeSpan.Zero, metadata.CapturedAt!.Value.Offset);
+    }
+
+    [Fact]
+    public async Task PhotoWithExplicitOffset_IsExact()
+    {
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.jpg","DateTimeOriginal":"2026:04:21 14:00:28","OffsetTimeOriginal":"+02:00"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.jpg", MediaType.Image);
+
+        Assert.False(metadata.TimeZoneInferred);
+        Assert.Equal(
+            new DateTimeOffset(2026, 4, 21, 12, 0, 28, TimeSpan.Zero),
+            metadata.CapturedAt!.Value.ToUniversalTime());
+    }
+
+    [Fact]
     public async Task PhotoWithMakeAndModel_IsReportedUnchanged()
     {
         var extractor = StubReturning("""

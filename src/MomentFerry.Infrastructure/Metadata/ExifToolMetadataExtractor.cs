@@ -33,6 +33,8 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 "-DateTimeOriginal",
                 "-OffsetTimeOriginal",
                 "-CreateDate",
+                "-CreationDate",
+                "-SamsungAndroidUtcOffset",
                 "-ModifyDate",
                 "-MediaCreateDate",
                 "-TrackCreateDate",
@@ -124,11 +126,15 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
         Share share,
         MediaType mediaType)
     {
+        // CreationDate first for video: OnePlus and Apple write the real local time with its offset
+        // there, which needs no assumption at all. The remaining QuickTime fields are UTC by
+        // specification and carry no offset.
         var candidates = mediaType == MediaType.Video
-            ? new[] { "MediaCreateDate", "CreateDate", "TrackCreateDate" }
+            ? new[] { "CreationDate", "MediaCreateDate", "CreateDate", "TrackCreateDate" }
             : new[] { "DateTimeOriginal", "CreateDate", "ModifyDate" };
 
         var explicitOffset = GetString(root, "OffsetTimeOriginal");
+        var recordedOffset = ParseUtcOffset(GetString(root, "SamsungAndroidUtcOffset"));
 
         foreach (var field in candidates)
         {
@@ -150,22 +156,72 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 return (absolute, field, false);
             }
 
-            if (TryParseLocal(raw, out var local))
+            if (!TryParseLocal(raw, out var local))
             {
-                var zoneId = string.IsNullOrWhiteSpace(share.DefaultTimeZone)
-                    ? TimeZoneInfo.Local.Id
-                    : share.DefaultTimeZone;
-                var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
-                var offset = zone.GetUtcOffset(local);
-                return (new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset), field, true);
+                continue;
             }
+
+            if (mediaType == MediaType.Video)
+            {
+                // QuickTime stores these in UTC. Reading them as the machine's local time shifted every
+                // video by the container's offset, and claimed the zone was known while doing it.
+                // Samsung records the offset it was filmed at separately, which lets the same instant
+                // be expressed in the zone of the recording instead of in UTC.
+                var instant = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Utc));
+                return (
+                    recordedOffset is null ? instant : instant.ToOffset(recordedOffset.Value),
+                    field,
+                    false);
+            }
+
+            // A photo timestamp really is local wall-clock time with nothing to anchor it, so the
+            // share's zone is a genuine assumption and is reported as one.
+            var zoneId = string.IsNullOrWhiteSpace(share.DefaultTimeZone)
+                ? TimeZoneInfo.Local.Id
+                : share.DefaultTimeZone;
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
+            var offset = zone.GetUtcOffset(local);
+            return (new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset), field, true);
         }
 
         return (null, null, false);
     }
 
+    /// <summary>
+    /// Reads an offset as cameras write it, "+0200" or "+02:00", and "Z" for UTC.
+    /// </summary>
+    private static TimeSpan? ParseUtcOffset(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        var trimmed = value.Trim();
+        if (trimmed is "Z" or "z") return TimeSpan.Zero;
+
+        var sign = trimmed[0] switch { '+' => 1, '-' => -1, _ => 0 };
+        if (sign == 0) return null;
+
+        var digits = trimmed[1..].Replace(":", string.Empty);
+        if (digits.Length != 4 ||
+            !int.TryParse(digits[..2], CultureInfo.InvariantCulture, out var hours) ||
+            !int.TryParse(digits[2..], CultureInfo.InvariantCulture, out var minutes) ||
+            hours > 14 || minutes > 59)
+        {
+            return null;
+        }
+
+        return sign * new TimeSpan(hours, minutes, 0);
+    }
+
+    /// <summary>
+    /// Only succeeds when the value actually carries an offset. The "K" format specifier matches an
+    /// empty offset as well and then silently attaches the machine's own zone, which is how every
+    /// video ended up shifted by the container's offset while being reported as certain.
+    /// </summary>
     private static bool TryParseWithOffset(string value, out DateTimeOffset result)
     {
+        result = default;
+        if (!HasOffset(value)) return false;
+
         var formats = new[]
         {
             "yyyy:MM:dd HH:mm:sszzz",
