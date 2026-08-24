@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.8.0] - 2026-08-24
+
+### Added
+
+- **Route again** on a finished operation in the Operations view. A file that already completed is never routed a second time — MomentFerry identifies it by share and path and remembers that the pair was done — so changing a naming template or a destination layout could not be applied to media that had already moved, short of inventing a new event or renaming the source. Route again supersedes the earlier operation and runs a normal transfer under the current rules. The copy the earlier run wrote is left where it is, so nothing is removed behind your back.
+
 ### Fixed
 
 - MomentFerry could delete a file it had produced itself. When a routed file finds its way back onto a source share — a sync task mirroring the destination folder, a shared album, a phone subscribing to the destination — it was indexed as new media, matched the same event, found an identical file at the destination and, under the Safe Move to existing duplicate policy, deleted the source without a word. Where source and destination are mirrored, that deletion travels back onto the destination copy. Such a file is now held in **Needs your decision**, naming the destination its content was already routed to, and the source is kept. A genuine duplicate contributed by a second device is held the same way: the content hash cannot tell the two cases apart, and holding a file can be undone while deleting it cannot.

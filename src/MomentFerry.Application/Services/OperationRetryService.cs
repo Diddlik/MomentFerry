@@ -40,24 +40,54 @@ public sealed class OperationRetryService(
             fileSystem.DeleteFile(stagingPath);
         }
 
-        var superseded = new MediaOperation
-        {
-            Id = operation.Id,
-            MediaFileId = operation.MediaFileId,
-            EventId = operation.EventId,
-            State = MediaOperationState.Failed,
-            SourcePath = operation.SourcePath,
-            StagingPath = operation.StagingPath,
-            DestinationPath = operation.DestinationPath,
-            SourceHash = operation.SourceHash,
-            DestinationHash = operation.DestinationHash,
-            RetryCount = operation.RetryCount,
-            LastError = "Superseded by explicit retry.",
-            StartedAt = operation.StartedAt,
-            CompletedAt = clock.UtcNow
-        };
-        await operations.UpsertAsync(superseded, cancellationToken);
+        await operations.UpsertAsync(
+            Supersede(operation, "Superseded by explicit retry."),
+            cancellationToken);
 
         return await transfer.ExecuteAsync(operation.MediaFileId, operation.EventId.Value, cancellationToken);
     }
+
+    /// <summary>
+    /// Routes a file again that already reached a terminal state, so a changed rename preset or
+    /// destination layout can be applied to it. The previous operation is marked superseded, which is
+    /// what lifts the terminal-state block in <see cref="TransferCoordinator"/>. Any file the earlier
+    /// run wrote is left where it is: removing it is the user's decision, not a side effect of this.
+    /// </summary>
+    public async Task<TransferExecutionResult> RouteAgainAsync(
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        var operation = await operations.GetAsync(operationId, cancellationToken)
+            ?? throw new InvalidOperationException("Operation does not exist.");
+
+        if (operation.State is not (MediaOperationState.Completed or MediaOperationState.Ignored))
+            throw new InvalidOperationException("Only completed or ignored operations can be routed again. Use retry for the rest.");
+        if (operation.EventId is null)
+            throw new InvalidOperationException("Operation has no event and cannot be routed again.");
+        if (!fileSystem.FileExists(operation.SourcePath))
+            throw new FileNotFoundException("The source file no longer exists, so there is nothing to route again.", operation.SourcePath);
+
+        await operations.UpsertAsync(
+            Supersede(operation, "Superseded by an explicit route-again request."),
+            cancellationToken);
+
+        return await transfer.ExecuteAsync(operation.MediaFileId, operation.EventId.Value, cancellationToken);
+    }
+
+    private MediaOperation Supersede(MediaOperation operation, string reason) => new()
+    {
+        Id = operation.Id,
+        MediaFileId = operation.MediaFileId,
+        EventId = operation.EventId,
+        State = MediaOperationState.Failed,
+        SourcePath = operation.SourcePath,
+        StagingPath = operation.StagingPath,
+        DestinationPath = operation.DestinationPath,
+        SourceHash = operation.SourceHash,
+        DestinationHash = operation.DestinationHash,
+        RetryCount = operation.RetryCount,
+        LastError = reason,
+        StartedAt = operation.StartedAt,
+        CompletedAt = clock.UtcNow
+    };
 }

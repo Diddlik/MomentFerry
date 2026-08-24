@@ -131,6 +131,34 @@ public static class TransferEndpoints
             }
         });
 
+        app.MapPost("/api/v1/operations/{id:guid}/route-again", async (
+            Guid id,
+            IRuntimeSettingsStore settingsStore,
+            IMediaOperationRepository operations,
+            IMediaEventRepository events,
+            IShareRepository shares,
+            IFileSystemGateway fileSystem,
+            SafeTransferService transfer,
+            IClock clock,
+            CancellationToken ct) =>
+        {
+            if ((await settingsStore.GetAsync(ct)).DryRun) return DryRunConflict();
+
+            try
+            {
+                var retry = new OperationRetryService(operations, events, shares, fileSystem, transfer, clock);
+                return Results.Ok(await retry.RouteAgainAsync(id, ct));
+            }
+            catch (FileNotFoundException ex)
+            {
+                return Results.NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or NotSupportedException)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         app.MapPost("/api/v1/recovery", async (
             OperationRecoveryService recovery,
             CancellationToken ct) => Results.Ok(await recovery.RecoverAsync(ct)));

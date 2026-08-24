@@ -982,6 +982,7 @@ function renderOperations() {
     <div class="th">${t('From')}</div>
     <div class="th">${t('Stage')}</div>
     <div class="th right">${t('State')}</div>`;
+  const terminal = new Set(['Completed', 'Ignored']);
 
   const rows = operations.map(operation => {
     const share = shareForPath(operation.sourcePath);
@@ -994,7 +995,9 @@ function renderOperations() {
       <div class="td strong" title="${escapeHtml(operation.sourcePath)}">${escapeHtml(baseName(operation.sourcePath))}</div>
       <div class="td">${escapeHtml(share ? share.name : '—')}</div>
       <div class="td">${escapeHtml(stage)}</div>
-      <div class="td right">${escapeHtml(t(operation.state))}</div>`;
+      <div class="td right">${escapeHtml(t(operation.state))}${terminal.has(operation.state) && !appInfo.dryRun
+        ? `<button class="btn btn-sm btn-ghost" style="margin-left:8px" type="button" onclick="routeAgain('${operation.id}')">${t('Route again')}</button>`
+        : ''}</div>`;
   }).join('');
 
   target.innerHTML = `
@@ -1345,6 +1348,24 @@ window.executeTransfer = async function (mediaFileId, eventId) {
     alert(result.message || t('Transfer finished: {{state}}', { state: t(result.operation.state) }));
     await refreshOperations();
     await previewRouting();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.routeAgain = async function (id) {
+  const operation = operations.find(item => item.id === id);
+  if (!operation) return;
+  if (!confirm(t('Route this file again with the current naming rules? The copy already at {{path}} stays where it is.', { path: operation.destinationPath || t('the destination') }))) return;
+
+  try {
+    const result = await runBackgroundTask(
+      `route-again:${id}`,
+      `${t('Route again')} · ${baseName(operation.sourcePath)}`,
+      'transfer',
+      () => request(`/api/v1/operations/${id}/route-again`, { method: 'POST' }));
+    alert(result.message || t('Transfer finished: {{state}}', { state: t(result.operation.state) }));
+    await Promise.all([refreshOperations(), refreshQuarantine()]);
   } catch (error) {
     alert(error.message);
   }

@@ -404,7 +404,7 @@ button.stat:hover { background: var(--panel); }
 /* Tables -------------------------------------------------------------- */
 .table-scroll { overflow-x: auto; }
 .table { display: grid; font-size: 12.5px; min-width: 720px; }
-.table-ops { grid-template-columns: 1.5fr 1fr 1.9fr .8fr; }
+.table-ops { grid-template-columns: 1.5fr 1fr 1.7fr 1fr; }
 .table-preview { grid-template-columns: 1.4fr 1.1fr .8fr 2fr; }
 .th {
   padding: 10px 18px; background: var(--inset);

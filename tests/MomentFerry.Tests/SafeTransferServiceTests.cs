@@ -167,6 +167,33 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RouteAgain_AfterTheSourceReturned_RoutesItUnderTheCurrentRulesAndKeepsTheOldCopy()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+        Assert.False(File.Exists(fixture.Media.SourcePath));
+
+        // The user puts the file back and asks for it to be routed again, for example after changing
+        // the naming rules. The coordinator would otherwise refuse: the pair already reached a
+        // terminal state.
+        await File.WriteAllBytesAsync(fixture.Media.SourcePath, fixture.SourceBytes);
+        var blocked = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.False(blocked.Executed);
+
+        var again = await fixture.Retry.RouteAgainAsync(first.Operation.Id);
+
+        Assert.Equal(MediaOperationState.Completed, again.Operation.State);
+        Assert.NotEqual(first.Operation.Id, again.Operation.Id);
+        Assert.True(File.Exists(again.Operation.DestinationPath!));
+
+        var superseded = Assert.Single(
+            await fixture.Operations.ListByStateAsync(MediaOperationState.Failed),
+            x => x.Id == first.Operation.Id);
+        Assert.Equal("Superseded by an explicit route-again request.", superseded.LastError);
+    }
+
+    [Fact]
     public async Task Coordinator_ConcurrentCalls_ExecuteExactlyOneTransfer()
     {
         var fixture = await CreateFixtureAsync();
@@ -273,7 +300,9 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             new FixedClock(capturedAt.AddHours(1)));
         var coordinator = new TransferCoordinator(operations, service);
 
-        return new Fixture(service, coordinator, operations, mediaFiles, fileSystem, media, mediaEvent, sourceBytes);
+        var retry = new OperationRetryService(operations, events, shares, fileSystem, service, new FixedClock(capturedAt.AddHours(2)));
+
+        return new Fixture(service, coordinator, retry, operations, mediaFiles, fileSystem, media, mediaEvent, sourceBytes);
     }
 
     private static bool PathEquals(string left, string right) =>
@@ -285,6 +314,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     private sealed record Fixture(
         SafeTransferService Service,
         TransferCoordinator Coordinator,
+        OperationRetryService Retry,
         TrackingOperationRepository Operations,
         IMediaFileRepository MediaFiles,
         TrackingFileSystemGateway FileSystem,
