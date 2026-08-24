@@ -137,6 +137,33 @@ Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default)
         return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
+    public async Task<int> SupersedeTerminalByEventAsync(
+        Guid eventId,
+        string reason,
+        DateTimeOffset supersededAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE operations
+            SET state = $failed,
+                last_error = $reason,
+                completed_at_utc = $supersededAt,
+                updated_at_utc = $now
+            WHERE event_id = $eventId
+              AND state IN ($completed, $ignored);
+            """;
+        command.Parameters.AddWithValue("$failed", (int)MediaOperationState.Failed);
+        command.Parameters.AddWithValue("$reason", reason);
+        command.Parameters.AddWithValue("$supersededAt", supersededAt.ToString("O"));
+        command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("$eventId", eventId.ToString("D"));
+        command.Parameters.AddWithValue("$completed", (int)MediaOperationState.Completed);
+        command.Parameters.AddWithValue("$ignored", (int)MediaOperationState.Ignored);
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task UpsertAsync(MediaOperation operation, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow.ToString("O");

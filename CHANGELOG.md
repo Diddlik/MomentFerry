@@ -6,6 +6,16 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.9.0] - 2026-08-24
+
+### Added
+
+- **Route again** for a whole event, next to *Sort existing media* on the event card. Sorting existing media into an event could not touch files the event had already finished: the backfill lifts the per-cycle file limit, but every file still passes the finished check, so a share full of already-routed media produced a run that matched hundreds of files and moved none. Route again clears that mark for the event in one step and then runs the normal backfill under the current naming rules. Items waiting in **Needs your decision** are left alone, so this cannot bury a decision you still owe, and copies already at the destination stay where they are.
+
+### Changed
+
+- the activity log no longer drowns in one line per already-routed file. A sorted share produced hundreds of identical entries every cycle, which flushed everything else out of the log within minutes; they are now summarised as a single count per share and cycle. Every other reason a file was skipped is still reported individually.
+
 ## [1.8.0] - 2026-08-24
 
 ### Added

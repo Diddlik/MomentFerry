@@ -194,6 +194,56 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SupersedeTerminalByEvent_UnblocksTheWholeEventAndLeavesHeldOperationsAlone()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+        await File.WriteAllBytesAsync(fixture.Media.SourcePath, fixture.SourceBytes);
+
+        var otherMedia = new MediaFile
+        {
+            Id = Guid.NewGuid(),
+            SourceShareId = fixture.Media.SourceShareId,
+            SourcePath = Path.Combine(SourceDirectory, "held.jpg"),
+            OriginalName = "held.jpg",
+            Size = 1,
+            Extension = ".jpg",
+            MediaType = MediaType.Image,
+            CapturedAt = fixture.Media.CapturedAt,
+            TimestampSource = fixture.Media.TimestampSource,
+            FirstSeenAt = fixture.Media.FirstSeenAt,
+            LastSeenAt = fixture.Media.LastSeenAt
+        };
+        await fixture.MediaFiles.UpsertAsync(otherMedia);
+
+        var held = new MediaOperation
+        {
+            Id = Guid.NewGuid(),
+            MediaFileId = otherMedia.Id,
+            EventId = fixture.Event.Id,
+            State = MediaOperationState.Quarantined,
+            SourcePath = Path.Combine(SourceDirectory, "held.jpg"),
+            StartedAt = fixture.Event.StartAt
+        };
+        await fixture.Operations.UpsertAsync(held);
+
+        var superseded = await fixture.Operations.SupersedeTerminalByEventAsync(
+            fixture.Event.Id,
+            "Superseded by an explicit route-again request for the whole event.",
+            fixture.Event.StartAt.AddDays(2));
+
+        Assert.Equal(1, superseded);
+        Assert.Equal(
+            MediaOperationState.Quarantined,
+            (await fixture.Operations.GetAsync(held.Id))!.State);
+
+        var again = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.True(again.Executed);
+        Assert.Equal(MediaOperationState.Completed, again.Result!.Operation.State);
+    }
+
+    [Fact]
     public async Task Coordinator_ConcurrentCalls_ExecuteExactlyOneTransfer()
     {
         var fixture = await CreateFixtureAsync();
@@ -393,6 +443,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.GetIncompleteByMediaFileAsync(mediaFileId, cancellationToken);
         public Task<MediaOperation?> FindCompletedByDestinationHashAsync(string destinationHash, Guid excludedMediaFileId, CancellationToken cancellationToken = default) =>
             inner.FindCompletedByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
+        public Task<int> SupersedeTerminalByEventAsync(Guid eventId, string reason, DateTimeOffset supersededAt, CancellationToken cancellationToken = default) =>
+            inner.SupersedeTerminalByEventAsync(eventId, reason, supersededAt, cancellationToken);
         public Task<bool> HasTerminalOperationAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
             inner.HasTerminalOperationAsync(mediaFileId, eventId, cancellationToken);
 

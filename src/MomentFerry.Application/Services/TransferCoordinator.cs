@@ -23,7 +23,8 @@ public sealed class TransferCoordinator(
                 return new CoordinatedTransferResult(
                     false,
                     null,
-                    "This media file/event combination has already reached a terminal operation state.");
+                    "This media file/event combination has already reached a terminal operation state.",
+                    AlreadyRouted: true);
             }
 
             var incomplete = await operations.GetIncompleteByMediaFileAsync(mediaFileId, cancellationToken);
@@ -52,4 +53,7 @@ public sealed class TransferCoordinator(
 public sealed record CoordinatedTransferResult(
     bool Executed,
     TransferExecutionResult? Result,
-    string? Message);
+    string? Message,
+    // Set apart from the other refusals because a full share carries thousands of them every cycle:
+    // the routing worker counts these instead of logging one line each.
+    bool AlreadyRouted = false);

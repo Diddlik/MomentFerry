@@ -314,6 +314,7 @@ public sealed class MediaRoutingWorker(
         var executed = 0;
         var skipped = 0;
         var errors = 0;
+        var alreadyRouted = 0;
 
         var routable = items
             .Where(x => x.State == RoutingPreviewState.Matched && x.Event is not null)
@@ -365,6 +366,11 @@ public sealed class MediaRoutingWorker(
                         result.Result?.Operation.State,
                         result.Message is null ? string.Empty : $" — {result.Message}");
                 }
+                else if (result.AlreadyRouted)
+                {
+                    skipped++;
+                    alreadyRouted++;
+                }
                 else
                 {
                     skipped++;
@@ -382,6 +388,16 @@ public sealed class MediaRoutingWorker(
                 errors++;
                 logger.LogWarning(ex, "Auto-routing failed for {File}", item.MediaFile.SourcePath);
             }
+        }
+
+        // One line instead of thousands: a share that is already sorted would otherwise flush every
+        // other record out of the activity log within a cycle or two.
+        if (alreadyRouted > 0)
+        {
+            logger.LogInformation(
+                "Auto-routing skipped {Count} files that already reached a terminal operation state. " +
+                "Use Route again on the event to route them once more.",
+                alreadyRouted);
         }
 
         return new RouteTally(matched, wouldMove, executed, skipped, errors);

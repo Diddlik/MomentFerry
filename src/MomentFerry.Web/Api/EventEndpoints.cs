@@ -82,6 +82,47 @@ public static class EventEndpoints
             return Results.Accepted(value: new { requestedAt, eventId = id, eventName = mediaEvent.Name });
         });
 
+        // Route again for a whole event. The backfill alone cannot help here: it lifts the per-cycle
+        // file cap, but every file still passes the terminal-state check, so media that already
+        // completed once stays put no matter how often the walk runs.
+        group.MapPost("/{id:guid}/route-again", async (
+            Guid id,
+            IMediaEventRepository repository,
+            IMediaOperationRepository operations,
+            IRuntimeSettingsStore settings,
+            AutomationStatus automationStatus,
+            AutomationWakeSignal wakeSignal,
+            IClock clock,
+            CancellationToken ct) =>
+        {
+            var mediaEvent = await repository.GetAsync(id, ct);
+            if (mediaEvent is null) return Results.NotFound();
+
+            var runtime = await settings.GetAsync(ct);
+            if (runtime.DryRun)
+                return Results.Conflict(new { error = "MomentFerry is in Dry Run mode. Disable Dry Run in Settings first." });
+            if (!runtime.AutomationEnabled)
+                return Results.Conflict(new { error = "Automation is disabled." });
+            if (automationStatus.Snapshot().CycleRunning)
+                return Results.Conflict(new { error = "An automation cycle is already running." });
+
+            var requestedAt = clock.UtcNow;
+            var superseded = await operations.SupersedeTerminalByEventAsync(
+                id,
+                "Superseded by an explicit route-again request for the whole event.",
+                requestedAt,
+                ct);
+            wakeSignal.WakeForBackfill(id);
+
+            return Results.Accepted(value: new
+            {
+                requestedAt,
+                eventId = id,
+                eventName = mediaEvent.Name,
+                superseded
+            });
+        });
+
         group.MapPost("/{id:guid}/start", async (
             Guid id,
             EventControlService control,

@@ -963,6 +963,7 @@ function renderEvents() {
           <div class="card-actions">
             <button class="btn btn-sm btn-ghost" type="button" onclick="editEvent('${event.id}')">${t('Edit')}</button>
             <button class="btn btn-sm btn-ghost" type="button" onclick="backfillEvent('${event.id}')" title="${escapeHtml(t("Scan the source shares and route media already captured in this event's window"))}">${t('Sort existing media')}</button>
+            ${appInfo.dryRun ? '' : `<button class="btn btn-sm btn-ghost" type="button" onclick="routeEventAgain('${event.id}')" title="${escapeHtml(t('Clear the finished mark on the files of this event and route them all again under the current rules'))}">${t('Route again')}</button>`}
             ${event.status === 'Active'
               ? `<button class="btn btn-sm" type="button" onclick="stopEvent('${event.id}')">${t('Stop')}</button>`
               : (canStart ? `<button class="btn btn-sm" type="button" onclick="startEvent('${event.id}')">${startLabel}</button>` : '')}
@@ -1313,6 +1314,34 @@ window.backfillEvent = async function (id) {
         (summary.errors ? ` · ${t(summary.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(summary.errors) })}` : ''));
     });
     await reloadEvents();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.routeEventAgain = async function (id) {
+  const event = events.find(x => x.id === id);
+  if (!event) return;
+
+  if (!confirm(
+    t('Route everything in “{{name}}” again?', { name: event.name }) + '\n\n' +
+    t('Files this event already finished are normally never routed a second time. This clears that mark and runs a full pass under the current naming rules.') + '\n\n' +
+    t('Copies already at the destination are left where they are. A file whose destination copy still exists is held for your decision instead of being moved again.'))) {
+    return;
+  }
+
+  const key = `route-event-again-${id}`;
+  try {
+    await runBackgroundTask(key, `${t('Route again')}: ${event.name}`, 'events', async () => {
+      const started = await request(`/api/v1/events/${id}/route-again`, { method: 'POST' });
+      const summary = await monitorAutomationCycle(started.requestedAt, key, t('Route again'));
+      alert(
+        t('Route again finished for “{{name}}”.', { name: event.name }) + '\n\n' +
+        t('{{count}} earlier operations cleared', { count: formatNumber(started.superseded) }) + ' · ' +
+        t('{{count}} routed', { count: formatNumber(summary.executed) }) +
+        (summary.errors ? ` · ${t(summary.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(summary.errors) })}` : ''));
+    });
+    await Promise.all([reloadEvents(), refreshQuarantine()]);
   } catch (error) {
     alert(error.message);
   }

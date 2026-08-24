@@ -22,5 +22,16 @@ public interface IMediaOperationRepository
 
     Task<bool> HasTerminalOperationAsync(
 Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Marks every finished operation of one event as superseded and reports how many were affected.
+    /// This is what lifts the terminal-state block for a whole event, so its media can be routed again
+    /// under changed rules or after the destination lost files.
+    /// </summary>
+    Task<int> SupersedeTerminalByEventAsync(
+        Guid eventId,
+        string reason,
+        DateTimeOffset supersededAt,
+        CancellationToken cancellationToken = default);
+
     Task UpsertAsync(MediaOperation operation, CancellationToken cancellationToken = default);
 }
