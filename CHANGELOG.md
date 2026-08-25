@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.4] - 2026-08-25
+
+### Fixed
+
+- turning automatic updates on did nothing until the next six-hourly check came due, which is up to six hours of a toggle that looks dead. Saving the setting now wakes the update worker, so the check runs immediately — and only on the transition from off to on, so re-saving other settings does not hammer the release service.
+
 ## [1.11.3] - 2026-08-25
 
 ### Changed

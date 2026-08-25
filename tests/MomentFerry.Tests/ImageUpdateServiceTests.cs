@@ -163,9 +163,45 @@ public sealed class ImageUpdateServiceTests
         Assert.Empty(handler.Requests);
     }
 
-    private static ImageUpdateWorker CreateWorker(ImageUpdateService service, IRuntimeSettingsStore settings) => new(
+    [Fact]
+    public async Task AutomaticUpdates_EnablingTheToggleWhileRunningChecksWithoutWaitingOutThePeriod()
+    {
+        // The startup check alone does not cover this: the toggle is usually switched on while the
+        // container is already running, and a six-hour wait then looks exactly like a dead toggle.
+        var handler = new QueueHandler(
+            JsonResponse("""{"tag_name":"v1.2.0","body":"Fixes","published_at":"2026-08-21T18:00:00Z"}"""),
+            JsonResponse("""{"tag_name":"v1.2.0","body":"Fixes","published_at":"2026-08-21T18:00:00Z"}"""),
+            new HttpResponseMessage(HttpStatusCode.OK));
+        var settings = new MemorySettingsStore();
+        var wakeSignal = new ImageUpdateWakeSignal();
+        var worker = CreateWorker(CreateService(handler), settings, wakeSignal);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            // The first pass finds the toggle off and contacts nothing.
+            await Task.Delay(200);
+            Assert.Empty(handler.Requests);
+
+            await settings.UpdateAsync(new MomentFerryRuntimeSettings { AutomaticImageUpdatesEnabled = true });
+            wakeSignal.Wake();
+            await WaitForRequestsAsync(handler, 3);
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal("http://updater:8080/v1/update", handler.Requests[^1].Uri);
+    }
+
+    private static ImageUpdateWorker CreateWorker(
+        ImageUpdateService service,
+        IRuntimeSettingsStore settings,
+        ImageUpdateWakeSignal? wakeSignal = null) => new(
         service,
         settings,
+        wakeSignal ?? new ImageUpdateWakeSignal(),
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["MomentFerry:Updates:InitialDelaySeconds"] = "0" })
             .Build(),

@@ -5,6 +5,7 @@ namespace MomentFerry.Web.Updates;
 public sealed class ImageUpdateWorker(
     ImageUpdateService updates,
     IRuntimeSettingsStore settings,
+    ImageUpdateWakeSignal wakeSignal,
     IConfiguration configuration,
     ILogger<ImageUpdateWorker> logger) : BackgroundService
 {
@@ -25,7 +26,9 @@ public sealed class ImageUpdateWorker(
             await CheckAndInstallAsync(stoppingToken);
             try
             {
-                await Task.Delay(CheckInterval, stoppingToken);
+                // Interruptible: enabling the toggle must not have to wait out the period that was
+                // already running when it was still off.
+                await wakeSignal.WaitAsync(CheckInterval, stoppingToken);
             }
             catch (OperationCanceledException)
             {

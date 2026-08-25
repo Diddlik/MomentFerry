@@ -2,6 +2,7 @@ using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 using MomentFerry.Infrastructure;
 using MomentFerry.Web.Background;
+using MomentFerry.Web.Updates;
 using System.Globalization;
 using System.Text;
 
@@ -21,6 +22,7 @@ public static class SettingsEndpoints
         app.MapPut("/api/v1/settings", async (
             RuntimeSettingsRequest request,
             IRuntimeSettingsStore store,
+            ImageUpdateWakeSignal updateWakeSignal,
             CancellationToken ct) =>
         {
             if (request.ReconciliationIntervalSeconds is < 15 or > 86400)
@@ -54,6 +56,11 @@ public static class SettingsEndpoints
                 request.MinimumFreeSpaceReserveBytes ?? current.MinimumFreeSpaceReserveBytes,
                 request.AutomaticImageUpdatesEnabled ?? current.AutomaticImageUpdatesEnabled,
                 request.OperationRetentionDays ?? current.OperationRetentionDays), ct);
+
+            // Turning automatic updates on checks now instead of whenever the six-hour period that was
+            // running while it was still off happens to end.
+            if (updated.AutomaticImageUpdatesEnabled && !current.AutomaticImageUpdatesEnabled)
+                updateWakeSignal.Wake();
 
             return Results.Ok(updated);
         });

@@ -75,6 +75,7 @@ builder.Services.AddSingleton(new ImageUpdateOptions(
 builder.Services.AddSingleton<IImageUpdateStatusStore>(new JsonImageUpdateStatusStore(
     builder.Configuration["MomentFerry:Updates:StatusPath"] ?? "data/update-status.json"));
 builder.Services.AddSingleton<ImageUpdateService>();
+builder.Services.AddSingleton<ImageUpdateWakeSignal>();
 builder.Services.AddHostedService<ImageUpdateWorker>();
 
 var databasePath = builder.Configuration["MomentFerry:Database:Path"] ?? "data/momentferry.db";
