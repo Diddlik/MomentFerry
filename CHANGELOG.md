@@ -6,6 +6,16 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.7] - 2026-08-25
+
+### Added
+
+- the rename report says why, not just how many: every skip reason is counted across the whole run, so a pass that leaves a thousand files alone explains itself instead of making you infer it from the first fifty examples.
+
+### Fixed
+
+- a stored file that failed its checksum check during *Rename stored files* reserved the name it was refused, so another file that legitimately rendered to that name was skipped as taken in the same run. The name is now claimed only once a file has earned it.
+
 ## [1.11.6] - 2026-08-25
 
 ### Added

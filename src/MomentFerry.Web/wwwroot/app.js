@@ -1409,7 +1409,9 @@ window.renameRoutedFiles = async function (id) {
       t('{{count}} examined', { count: formatNumber(result.examined) }) + ' · ' + renamed + ' · ' +
       t('{{count}} already correct', { count: formatNumber(result.unchanged) }) + ' · ' +
       t('{{count}} skipped', { count: formatNumber(result.skipped) }) +
-      (result.errors ? ` · ${t(result.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(result.errors) })}` : ''));
+      (result.errors ? ` · ${t(result.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(result.errors) })}` : '') +
+      // Counts alone leave a run that skipped a thousand files unexplained.
+      Object.entries(result.reasons || {}).map(([reason, count]) => `\n${formatNumber(count)} × ${t(reason)}`).join(''));
     await refreshOperations();
   } catch (error) {
     alert(error.message);

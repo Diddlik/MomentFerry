@@ -46,6 +46,9 @@ public sealed class RoutedFileRenameService(
         var skipped = 0;
         var errors = 0;
         var samples = new List<RoutedRenameSample>();
+        // Sampling is capped, so the reasons are tallied separately: a run that skips a thousand files
+        // must say why without making the caller infer it from the first fifty.
+        var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
         // A dry run moves nothing, so two files could otherwise be reported as taking the same name.
         var planned = new HashSet<string>(PathComparer);
 
@@ -56,7 +59,7 @@ public sealed class RoutedFileRenameService(
             if (string.IsNullOrWhiteSpace(operation.DestinationPath))
             {
                 skipped++;
-                Sample(samples, operation.SourcePath, null, "No destination was recorded.");
+                Sample(samples, reasons, operation.SourcePath, null, "No destination was recorded.");
                 continue;
             }
 
@@ -64,7 +67,7 @@ public sealed class RoutedFileRenameService(
             if (!fileSystem.FileExists(current))
             {
                 skipped++;
-                Sample(samples, current, null, "The stored file is no longer at the destination.");
+                Sample(samples, reasons, current, null, "The stored file is no longer at the destination.");
                 continue;
             }
 
@@ -74,7 +77,7 @@ public sealed class RoutedFileRenameService(
                 !shareById.TryGetValue(mediaEvent.DestinationShareId, out var destinationShare))
             {
                 skipped++;
-                Sample(samples, current, null, "The share or media record behind this file is gone.");
+                Sample(samples, reasons, current, null, "The share or media record behind this file is gone.");
                 continue;
             }
 
@@ -89,7 +92,7 @@ public sealed class RoutedFileRenameService(
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
                 errors++;
-                Sample(samples, current, null, ex.Message);
+                Sample(samples, reasons, current, null, ex.Message);
                 continue;
             }
 
@@ -99,10 +102,10 @@ public sealed class RoutedFileRenameService(
                 continue;
             }
 
-            if (fileSystem.FileExists(target) || !planned.Add(target))
+            if (fileSystem.FileExists(target))
             {
                 skipped++;
-                Sample(samples, current, target, "That name is already taken at the destination.");
+                Sample(samples, reasons, current, target, "That name is already taken at the destination.");
                 continue;
             }
 
@@ -114,7 +117,7 @@ public sealed class RoutedFileRenameService(
             if (string.IsNullOrWhiteSpace(operation.DestinationHash))
             {
                 skipped++;
-                Sample(samples, current, target, "No checksum was recorded for the stored file.");
+                Sample(samples, reasons, current, target, "No checksum was recorded for the stored file.");
                 continue;
             }
 
@@ -127,21 +130,30 @@ public sealed class RoutedFileRenameService(
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 errors++;
-                Sample(samples, current, target, ex.Message);
+                Sample(samples, reasons, current, target, ex.Message);
                 continue;
             }
 
             if (!string.Equals(storedHash, operation.DestinationHash, StringComparison.OrdinalIgnoreCase))
             {
                 skipped++;
-                Sample(samples, current, target, "The stored file no longer matches the checksum on record.");
+                Sample(samples, reasons, current, target, "The stored file no longer matches the checksum on record.");
+                continue;
+            }
+
+            // Reserved only once the file has earned the name: a rejected file that reserved its
+            // target would push the file that legitimately renders to it aside as well.
+            if (!planned.Add(target))
+            {
+                skipped++;
+                Sample(samples, reasons, current, target, "That name is already taken at the destination.");
                 continue;
             }
 
             if (dryRun)
             {
                 renamed++;
-                Sample(samples, current, target, null);
+                Sample(samples, reasons, current, target, null);
                 continue;
             }
 
@@ -155,18 +167,18 @@ public sealed class RoutedFileRenameService(
                 if (!fileSystem.FileExists(target) || fileSystem.GetFileLength(target) != lengthBefore)
                 {
                     errors++;
-                    Sample(samples, current, target, "The renamed file did not arrive intact.");
+                    Sample(samples, reasons, current, target, "The renamed file did not arrive intact.");
                     continue;
                 }
 
                 await operations.UpsertAsync(WithDestination(operation, target), cancellationToken);
                 renamed++;
-                Sample(samples, current, target, null);
+                Sample(samples, reasons, current, target, null);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 errors++;
-                Sample(samples, current, target, ex.Message);
+                Sample(samples, reasons, current, target, ex.Message);
             }
         }
 
@@ -179,14 +191,21 @@ public sealed class RoutedFileRenameService(
             unchanged,
             skipped,
             errors,
-            samples);
+            samples,
+            reasons);
     }
 
     private static StringComparer PathComparer =>
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private static void Sample(List<RoutedRenameSample> samples, string from, string? to, string? reason)
+    private static void Sample(
+        List<RoutedRenameSample> samples,
+        Dictionary<string, int> reasons,
+        string from,
+        string? to,
+        string? reason)
     {
+        if (reason is not null) reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
         if (samples.Count >= MaxSamples) return;
         samples.Add(new RoutedRenameSample(Path.GetFileName(from), to is null ? null : Path.GetFileName(to), reason));
     }
@@ -238,7 +257,9 @@ public sealed record RoutedRenameResult(
     int Unchanged,
     int Skipped,
     int Errors,
-    IReadOnlyList<RoutedRenameSample> Samples);
+    IReadOnlyList<RoutedRenameSample> Samples,
+    /// <summary>Every reason a file was skipped or failed, with how often it applied.</summary>
+    IReadOnlyDictionary<string, int> Reasons);
 
 /// <summary>One decision, named by filename only: the folder is the event's and never changes here.</summary>
 public sealed record RoutedRenameSample(string From, string? To, string? Reason);

@@ -96,6 +96,32 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Rename_TalliesEveryReasonEvenBeyondTheSampleCap()
+    {
+        var fixture = await CreateAsync();
+        var moved = await StoreAsync(fixture, "20260814_174744_OnePlus 12.jpg");
+        // A second file, one second later, so the two never compete for the same target name and the
+        // outcome cannot depend on the order the operations come back in.
+        var second = await AddMediaAsync(fixture, seconds: 45);
+        var replaced = await StoreAsync(fixture, "20260814_174745_OnePlus 12.jpg", media: second);
+        await File.WriteAllTextAsync(replaced.DestinationPath!, "replaced content");
+        await fixture.CameraMappings.UpsertAsync(new CameraMapping { From = "OnePlus 12", To = "OnePlus12" });
+
+        var result = await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: false);
+
+        Assert.Equal(2, result!.Examined);
+        Assert.Equal(1, result.Renamed);
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal(
+            new Dictionary<string, int> { ["The stored file no longer matches the checksum on record."] = 1 },
+            result.Reasons);
+        Assert.True(File.Exists(Path.Combine(
+            Path.GetDirectoryName(moved.DestinationPath!)!,
+            "20260814_174744_OnePlus12.jpg")));
+        Assert.True(File.Exists(replaced.DestinationPath!));
+    }
+
+    [Fact]
     public async Task Rename_LeavesAFileWhoseNameAlreadyMatchesTheRulesAlone()
     {
         var fixture = await CreateAsync();
@@ -200,20 +226,48 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
     public async Task Rename_ReturnsNullForAnUnknownEvent()
         => Assert.Null(await (await CreateAsync()).Service.RenameAsync(Guid.NewGuid(), dryRun: false));
 
-    private async Task<MediaOperation> StoreAsync(Fixture fixture, string storedName, bool withHash = true)
+    private async Task<MediaFile> AddMediaAsync(Fixture fixture, int seconds)
+    {
+        var media = new MediaFile
+        {
+            SourceShareId = fixture.Media.SourceShareId,
+            SourcePath = Path.Combine(
+                Path.GetDirectoryName(fixture.Media.SourcePath)!,
+                $"IMG2026081417{seconds:00}.jpg"),
+            OriginalName = $"IMG2026081417{seconds:00}.jpg",
+            Size = StoredContent.Length,
+            Extension = ".jpg",
+            MediaType = MediaType.Image,
+            CapturedAt = fixture.Media.CapturedAt!.Value.AddSeconds(1),
+            TimestampSource = fixture.Media.TimestampSource,
+            CameraMake = fixture.Media.CameraMake,
+            CameraModel = fixture.Media.CameraModel,
+            FirstSeenAt = fixture.Media.FirstSeenAt,
+            LastSeenAt = fixture.Media.LastSeenAt
+        };
+        await fixture.MediaFiles.UpsertAsync(media);
+        return media;
+    }
+
+    private async Task<MediaOperation> StoreAsync(
+        Fixture fixture,
+        string storedName,
+        bool withHash = true,
+        MediaFile? media = null)
     {
         var destinationFolder = Path.Combine(fixture.DestinationRoot, "Kroatien 2026");
         Directory.CreateDirectory(destinationFolder);
         var destinationPath = Path.Combine(destinationFolder, storedName);
         await File.WriteAllTextAsync(destinationPath, StoredContent);
         var hash = withHash ? await HashOfAsync(destinationPath) : null;
+        var subject = media ?? fixture.Media;
 
         var operation = new MediaOperation
         {
-            MediaFileId = fixture.Media.Id,
+            MediaFileId = subject.Id,
             EventId = fixture.Event.Id,
             State = MediaOperationState.Completed,
-            SourcePath = fixture.Media.SourcePath,
+            SourcePath = subject.SourcePath,
             DestinationPath = destinationPath,
             SourceHash = hash,
             DestinationHash = hash,
@@ -314,6 +368,7 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             operations,
             presets,
             cameraMappings,
+            mediaFiles,
             preset.Id,
             mediaEvent,
             media,
@@ -325,6 +380,7 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         SqliteMediaOperationRepository Operations,
         SqliteRenamePresetRepository Presets,
         SqliteCameraMappingRepository CameraMappings,
+        SqliteMediaFileRepository MediaFiles,
         Guid PresetId,
         MediaEvent Event,
         MediaFile Media,
