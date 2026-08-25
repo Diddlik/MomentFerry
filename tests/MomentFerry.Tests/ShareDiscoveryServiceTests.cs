@@ -68,6 +68,37 @@ public sealed class ShareDiscoveryServiceTests : IDisposable
     }
 
     [Fact]
+    public void Enumerate_SkipsResilioPartialDownloadsAtAnyDepth()
+    {
+        // A transfer in progress is called "_.pending-<id>-<name>", which "*.!sync" never covered. A
+        // stalled one looks stable after the share's window, and routing it would verify a truncated
+        // file against its own checksum and then let Safe Move remove the partial.
+        var album = Directory.CreateDirectory(Path.Combine(root, "Italy"));
+        var photoPath = Path.Combine(album.FullName, "photo.jpg");
+        File.WriteAllText(photoPath, "photo");
+        var nestedPartial = Path.Combine(album.FullName, "_.pending-1781630915-IMG20260609192835.heic");
+        File.WriteAllText(nestedPartial, "half a photo");
+        var rootPartial = Path.Combine(root, "_.pending-1781288456-IMG20260605202055.heic");
+        File.WriteAllText(rootPartial, "half a photo");
+
+        var service = new ShareDiscoveryService(
+            new LocalFileSystemGateway(),
+            new FixedClock(DateTimeOffset.UnixEpoch));
+        var share = new Share
+        {
+            Name = "pavel",
+            Path = root,
+            Role = ShareRole.Source,
+            IgnorePatterns = SharePresets.Resilio.IgnorePatterns
+        };
+
+        var file = Assert.Single(service.Enumerate(share));
+        Assert.Equal("Italy/photo.jpg", file.RelativePath);
+        Assert.Null(service.Observe(share, nestedPartial));
+        Assert.Null(service.Observe(share, rootPartial));
+    }
+
+    [Fact]
     public void Observe_RejectsPathsOutsideTheShare()
     {
         Directory.CreateDirectory(root);

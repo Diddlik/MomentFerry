@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.10] - 2026-08-25
+
+### Fixed
+
+- Resilio transfers in progress were indexed as media. A download in flight is called `_.pending-<id>-<name>`, which the preset's `*.!sync` never matched, so 56 of them sat in the index of the installation this was found on. None had been routed there because their capture times fell outside every event, but a stalled download looks stable once the share's window passes, and routing one would copy a truncated file, verify it against the truncated content's own checksum, and then let Safe Move remove the partial. The Resilio preset now ignores the prefix at any depth. Existing shares keep the patterns they were created with; add `_.pending-*` to them to get the same protection.
+
 ## [1.11.9] - 2026-08-25
 
 ### Fixed

@@ -13,10 +13,14 @@ public static class SharePresets
         "Generic",
         Array.Empty<string>());
 
+    // "_.pending-<id>-<name>" is what a Resilio transfer in progress is called, and "*.!sync" does not
+    // cover it. Indexing one is harmless while it grows, but a stalled download looks stable after the
+    // share's window and would be routed as a real file: the copy would verify against the truncated
+    // content's own checksum and Safe Move would then remove the partial.
     public static readonly SharePreset Resilio = new(
         "resilio",
         "Resilio Sync",
-        new[] { ".sync/**", "*.!sync" });
+        new[] { ".sync/**", "*.!sync", "_.pending-*" });
 
     public static readonly SharePreset Syncthing = new(
         "syncthing",
