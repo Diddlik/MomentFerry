@@ -14,15 +14,31 @@ It watches filesystem shares, identifies photos and videos from metadata, matche
 
 ### Overview
 
-![MomentFerry overview showing an active event, routing progress, destination storage, and source status](docs/screenshots/overview.png)
+![MomentFerry overview showing the running events, what moved in the last cycle, destination storage, source status and the decision queue](docs/screenshots/overview.png)
+
+### Events
+
+![MomentFerry events listing two capture-time windows with their destination folder, mode and per-event actions](docs/screenshots/events.png)
 
 ### Share configuration
 
 ![MomentFerry shares showing source and destination folder configuration](docs/screenshots/shares.png)
 
+### File naming
+
+![MomentFerry file naming with a live template preview, a rename preset and camera-name mappings](docs/screenshots/file-naming.png)
+
+### Operations
+
+![MomentFerry operations listing every routed file with its destination and state](docs/screenshots/operations.png)
+
 ### Automation and safety
 
-![MomentFerry automation and safety settings with Dry Run enabled](docs/screenshots/automation-safety.png)
+![MomentFerry automation and safety settings: the Dry Run, automation and timestamp-fallback switches with scan pace and destination headroom](docs/screenshots/automation-safety.png)
+
+### Maintenance
+
+![MomentFerry maintenance with index and operation-history housekeeping actions](docs/screenshots/maintenance.png)
 
 ## Primary use case
 
@@ -38,18 +54,22 @@ The default destructive operation is **Safe Move**:
 2. Read capture metadata with ExifTool.
 3. Match exactly one event.
 4. Persist the media file and operation state.
-5. Check destination capacity before opening the staging copy.
-6. Copy into a destination-side staging directory.
-7. Verify size and SHA-256.
-8. Commit the verified file to its final destination.
-9. Persist `DestinationCommitted` and `SourceFinalizePending`.
-10. Delete the source only after the committed destination is verified.
+5. Hash the source, then ask whether the destination already holds that exact content — by hash, regardless of the name it was stored under. A match that is still verifiable on disk counts as an identical destination, and the event's duplicate policy decides whether the source is removed.
+6. Check destination capacity before opening the staging copy.
+7. Copy into a destination-side staging directory.
+8. Verify the staged size, the staged SHA-256, and the source SHA-256 again — a source that changed while it was being copied is caught here.
+9. Re-resolve the destination path, then commit the verified file.
+10. Verify size and SHA-256 once more, in place, and set the committed file's timestamps to the capture time so galleries sort by shooting order. A filesystem that refuses the stamp never invalidates a verified copy.
+11. Persist `DestinationCommitted` and `SourceFinalizePending`.
+12. Delete the source only after the committed destination is verified.
 
 If MomentFerry cannot prove the destination is safe, the source is preserved. Incomplete operations are reconciled after restart. Transfers for the same media file are serialized in-process to prevent concurrent duplicate execution.
 
-Real filesystem copies keep a **512 MiB free-space reserve in addition to the file being copied** whenever free capacity can be determined. If capacity cannot be determined, MomentFerry reports it as unknown rather than guessing.
+A finished operation keeps a file from being routed a second time only while the file it committed is still at the destination. If that copy is gone, the source is routed again rather than skipped for good.
 
-**Dry Run is enabled by default.** Live transfers require an explicit confirmation in the Web UI.
+Real filesystem copies keep a free-space reserve **in addition to the file being copied** — 512 MiB by default, adjustable under Automation & safety — whenever free capacity can be determined. If capacity cannot be determined, MomentFerry reports it as unknown rather than guessing.
+
+**Dry Run is enabled by default**, and leaving it takes an explicit confirmation token that the REST API enforces as well, not only the Web UI. **Automation is enabled by default**, so a fresh container starts scanning immediately: Dry Run is what stands between it and moving files.
 
 ## Implemented
 
@@ -65,20 +85,28 @@ Real filesystem copies keep a **512 MiB free-space reserve in addition to the fi
 - ExifTool metadata extraction
 - timezone-aware capture timestamps
 - late-sync matching for closed events
-- routing preview
-- SHA-256 duplicate verification
+- routing preview and event backfill for media that is already on disk
+- *Route again* for a single file or a whole event, under the current naming rules
+- SHA-256 duplicate verification, including content the destination already holds under another name
 - filename conflict handling
+- filename templates per share, with camera-name mappings and a live preview
+- per-share media extensions and separate image/video destination subfolders
+- destination files stamped with the capture time
 - Safe Move and Copy
 - persistent operation state machine
 - restart recovery and explicit retry
+- a *Needs your decision* queue for quarantined and retry-pending files
 - end-to-end Safe Move failure-path tests
 - per-media transfer serialization
 - periodic reconciliation worker
 - FileSystemWatcher wake-ups with periodic reconciliation fallback
 - persistent runtime settings
 - Dry Run / Live mode safety gate
-- automation and destination-storage status
-- REST API
+- automation and destination-storage status, manual scans, and an in-app activity log
+- Maintenance: re-read metadata, forget missing files, compact the database, expire finished operations
+- in-app image updates: check, one-click install, and optional automatic installation through an updater companion
+- REST API, OpenAPI JSON and a Swagger UI at `/docs`
+- Prometheus metrics at `/metrics` and operation-history CSV export
 - optional MQTT event control
 - Home Assistant REST and MQTT examples
 - Docker / Docker Compose
@@ -113,6 +141,8 @@ Open `http://<server>:8080`.
 
 The `data` volume contains the SQLite database, persistent runtime settings and the last completed automation status. Docker environment values act as initial defaults; settings saved in the Web UI are stored in `data/runtime-settings.json` and take precedence for runtime automation values.
 
+The example file also carries the container healthcheck, the environment defaults matching the settings above, and a commented updater companion. That companion plus `MomentFerry__Updates__WatchtowerUrl` and `__WatchtowerToken` is what lets the in-app *Install update* button actually restart onto the new image; without it MomentFerry only reports that a newer release exists.
+
 When adding a share, use the mounted-folder browser instead of entering a container path manually. Source shares are selected below `/sources`, destination shares below `/destinations`. Folders can be expanded to select any nested directory, so a single root mount can provide several independently configured shares.
 
 ## Recommended first setup
@@ -132,6 +162,7 @@ Important endpoints include:
 
 ```text
 GET  /health
+GET  /metrics
 GET  /api/v1/info
 GET  /api/v1/status
 GET  /api/v1/storage
@@ -139,15 +170,32 @@ GET  /api/v1/settings
 PUT  /api/v1/settings
 GET  /api/v1/folders?role=Source
 GET  /api/v1/shares
+GET  /api/v1/shares/{id}/routing-preview
+GET  /api/v1/source-groups
+GET  /api/v1/rename-presets
+GET  /api/v1/camera-mappings
 GET  /api/v1/events/
 POST /api/v1/events/{id}/start
 POST /api/v1/events/{id}/stop
 POST /api/v1/events/quick-start
 POST /api/v1/events/quick-stop
-GET  /api/v1/shares/{id}/routing-preview
+POST /api/v1/events/{id}/backfill
+POST /api/v1/events/{id}/route-again
+POST /api/v1/automation/run
 GET  /api/v1/operations
+GET  /api/v1/operations/export.csv
+POST /api/v1/operations/{id}/retry
+POST /api/v1/operations/{id}/route-again
+GET  /api/v1/quarantine
+GET  /api/v1/logs
+GET  /api/v1/maintenance
+GET  /api/v1/updates
+POST /api/v1/updates/check
+POST /api/v1/updates/install
 POST /api/v1/recovery
 ```
+
+The full contract is served as OpenAPI JSON at `/openapi/v1.json`, with a browsable UI at `/docs`.
 
 ## MQTT
 
@@ -172,10 +220,13 @@ Supported actions are `start`, `stop`, `quick-start`, and `quick-stop`. MQTT con
 dotnet restore MomentFerry.sln
 dotnet build MomentFerry.sln -c Release
 dotnet test MomentFerry.sln -c Release
+dotnet format MomentFerry.sln --verify-no-changes --no-restore
 docker build -t momentferry:dev .
 ```
 
-CI validates the Release build, automated tests and Docker image. The runtime image contains ExifTool and a container healthcheck.
+Add `-m:1` to the build and test commands on Windows: parallel project builds intermittently collide over file locks there.
+
+CI validates the Release build, automated tests with coverage collection, and the Docker image. The runtime image contains ExifTool and a container healthcheck.
 
 ## Documentation
 
@@ -193,4 +244,4 @@ CI validates the Release build, automated tests and Docker image. The runtime im
 
 ## Status
 
-Active development. Core routing, source-deletion safety, recovery, watcher/reconciliation automation, storage protection, versioned database migrations, Docker deployment, REST, OpenAPI, optional MQTT control and the initial Web UI update workflow are implemented. Remaining work before v1.0 is tracked in the roadmap.
+Active development past v1.0. Core routing, source-deletion safety, recovery, watcher/reconciliation automation, storage protection, versioned database migrations, filename templates, maintenance tooling, Docker deployment, REST, OpenAPI, optional MQTT control and in-app image updates — including fully automatic installation — are implemented. Remaining work is tracked in the roadmap.
