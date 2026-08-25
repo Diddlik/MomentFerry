@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.3] - 2026-08-25
+
+### Changed
+
+- installing an update no longer asks you to type `INSTALL_UPDATE` first. The button only appears when a newer release exists, it names the version it installs, and a restart onto a verified image destroys nothing, so the dialog only stood between you and the thing you clicked. The API still requires the explicit token, so a stray request cannot restart the container.
+
 ## [1.11.2] - 2026-08-25
 
 ### Fixed

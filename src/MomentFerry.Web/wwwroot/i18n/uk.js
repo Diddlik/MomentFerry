@@ -358,7 +358,6 @@ window.MF_MESSAGES = {
   "Test failed · {{error}}": "Перевірка не вдалася · {{error}}",
   "Test path": "Перевірка шляху",
   "Testing path…": "Перевірка шляху…",
-  "The MomentFerry container will restart. Type INSTALL_UPDATE to continue.": "Контейнер MomentFerry перезапуститься. Введіть INSTALL_UPDATE, щоб продовжити.",
   "The folders MomentFerry can see. Your sync tool keeps them filled.": "Теки, які бачить MomentFerry. Ваш інструмент синхронізації їх наповнює.",
   "The history records what was copied where and which checksums matched. It is your evidence, so nothing expires unless you say so. Anything still waiting for a decision is never removed, however old it is.": "Історія фіксує, що й куди було скопійовано та які контрольні суми збіглися. Це ваш доказ, тож ніщо не застаріває без вашого рішення. Те, що досі чекає на рішення, не видаляється ніколи, хоч би яким старим воно було.",
   "The operation history is kept for good.": "Історія операцій зберігається назавжди.",

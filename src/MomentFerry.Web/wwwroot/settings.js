@@ -255,6 +255,9 @@ $('refreshAutomationStatus').addEventListener('click', loadAutomationStatus);
 
 /* Image updates ------------------------------------------------------------ */
 
+/** Matches ImageUpdateRequest.RequiredConfirmation: the API refuses an install without it. */
+const INSTALL_CONFIRMATION = 'INSTALL_UPDATE';
+
 function renderImageUpdate(status) {
   updateInfo = status;
 
@@ -337,8 +340,9 @@ async function waitForUpdatedMomentFerry(expectedVersion, timeoutMs = 180000) {
 }
 
 $('installImageUpdate').addEventListener('click', async () => {
-  const confirmation = prompt(t('The MomentFerry container will restart. Type INSTALL_UPDATE to continue.'));
-  if (confirmation !== 'INSTALL_UPDATE') return;
+  // No dialog: the button only exists while an update is available, it names the version it installs,
+  // and a restart onto a verified image destroys nothing. The API still requires the explicit token,
+  // so a stray POST cannot restart the container.
 
   const expectedVersion = updateInfo.latestVersion;
   const statusText = $('imageUpdateStatus');
@@ -351,7 +355,7 @@ $('installImageUpdate').addEventListener('click', async () => {
       try {
         await settingsRequest('/api/v1/updates/install', {
           method: 'POST',
-          body: JSON.stringify({ confirmation })
+          body: JSON.stringify({ confirmation: INSTALL_CONFIRMATION })
         });
       } catch (error) {
         if (error.status) throw error;
