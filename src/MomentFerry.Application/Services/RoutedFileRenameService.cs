@@ -11,9 +11,11 @@ namespace MomentFerry.Application.Services;
 /// those names either: it needs a source to re-route, and Safe Move released the sources once their
 /// copies were verified. This renames the committed file where it lies.
 ///
-/// Content is never read, written or overwritten: a file is renamed only when the name the current
-/// rules produce is free, and the operation history follows the file to its new name so it keeps
-/// pointing at the copy it verified.
+/// A file is renamed only when the name the current rules produce is free, and only when the bytes on
+/// disk still match the checksum its operation recorded. That check is the point: the operation is the
+/// record that this content was verified, and moving it to a new name without proving the content is
+/// still the content would let a replaced or damaged file inherit a verification it never earned.
+/// Nothing is ever overwritten, and the history follows the file so it keeps pointing at its copy.
 /// </summary>
 public sealed class RoutedFileRenameService(
     IMediaOperationRepository operations,
@@ -21,7 +23,8 @@ public sealed class RoutedFileRenameService(
     IMediaEventRepository events,
     IShareRepository shares,
     RenameContextFactory renameContexts,
-    IFileSystemGateway fileSystem)
+    IFileSystemGateway fileSystem,
+    IHashService hashes)
 {
     /// <summary>How many individual decisions are reported back; the counts always cover everything.</summary>
     private const int MaxSamples = 50;
@@ -100,6 +103,38 @@ public sealed class RoutedFileRenameService(
             {
                 skipped++;
                 Sample(samples, current, target, "That name is already taken at the destination.");
+                continue;
+            }
+
+            // The operation is the record that this content was verified. A rename that carried that
+            // record over to a new name without re-proving the content would hand a replaced or
+            // damaged file a verification it never earned, so the bytes decide here too. Only files
+            // that are actually about to move are read: a library whose names are already correct
+            // costs nothing on the next run.
+            if (string.IsNullOrWhiteSpace(operation.DestinationHash))
+            {
+                skipped++;
+                Sample(samples, current, target, "No checksum was recorded for the stored file.");
+                continue;
+            }
+
+            string storedHash;
+            try
+            {
+                await using var stream = fileSystem.OpenRead(current);
+                storedHash = await hashes.ComputeSha256Async(stream, cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                errors++;
+                Sample(samples, current, target, ex.Message);
+                continue;
+            }
+
+            if (!string.Equals(storedHash, operation.DestinationHash, StringComparison.OrdinalIgnoreCase))
+            {
+                skipped++;
+                Sample(samples, current, target, "The stored file no longer matches the checksum on record.");
                 continue;
             }
 

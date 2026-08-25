@@ -1391,7 +1391,7 @@ window.renameRoutedFiles = async function (id) {
   if (!confirm(
     t('Apply the current naming rules to the files “{{name}}” already stored?', { name: event.name }) + '\n\n' +
     t('MomentFerry names files on the way to the destination, so a preset or camera mapping added later never reached what was already stored. Route again cannot reach them either once Safe Move released their sources.') + '\n\n' +
-    t('Only a file whose new name is free is renamed. Nothing is overwritten, no content is read, and the operation history follows each file to its new name.'))) {
+    t('Only a file whose new name is free is renamed, and only while its bytes still match the checksum on record. Nothing is overwritten, and the operation history follows each file to its new name.'))) {
     return;
   }
 

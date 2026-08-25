@@ -227,7 +227,7 @@ window.MF_MESSAGES = {
   "One last check before anything moves": "Остання перевірка, перш ніж щось зрушить",
   "One last check before anything moves.": "Остання перевірка, перш ніж щось зрушить.",
   "One pattern per line": "По одному шаблону в рядку",
-  "Only a file whose new name is free is renamed. Nothing is overwritten, no content is read, and the operation history follows each file to its new name.": "Перейменовується лише файл, чиє нове ім'я вільне. Ніщо не перезаписується, вміст не читається, а історія операцій прямує за кожним файлом до його нового імені.",
+  "Only a file whose new name is free is renamed, and only while its bytes still match the checksum on record. Nothing is overwritten, and the operation history follows each file to its new name.": "Перейменовується лише файл, чиє нове ім'я вільне, і тільки поки його байти збігаються із записаною контрольною сумою. Ніщо не перезаписується, а історія операцій прямує за кожним файлом до його нового імені.",
   "Open API documentation": "Відкрити документацію API",
   "Operation history": "Історія операцій",
   "Operations": "Операції",

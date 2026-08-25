@@ -11,6 +11,8 @@ namespace MomentFerry.Tests;
 /// </summary>
 public sealed class RoutedFileRenameServiceTests : IDisposable
 {
+    private const string StoredContent = "verified content";
+
     private readonly string _directory = Path.Combine(
         Path.GetTempPath(),
         "momentferry-rename-routed",
@@ -49,11 +51,48 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         var renamed = Path.Combine(Path.GetDirectoryName(stored.DestinationPath!)!, "20260814_174744_OnePlus12.jpg");
         Assert.True(File.Exists(renamed));
         Assert.False(File.Exists(stored.DestinationPath!));
+        Assert.Equal(StoredContent, await File.ReadAllTextAsync(renamed));
 
         // The history must follow the file, or it would vouch for a path that no longer exists.
         var persisted = await fixture.Operations.GetAsync(stored.Id);
         Assert.Equal(renamed, persisted!.DestinationPath);
         Assert.Equal(MediaOperationState.Completed, persisted.State);
+        Assert.Equal(stored.DestinationHash, persisted.DestinationHash);
+    }
+
+    [Fact]
+    public async Task Rename_RefusesToMoveAStoredFileThatNoLongerMatchesItsChecksum()
+    {
+        var fixture = await CreateAsync();
+        var stored = await StoreAsync(fixture, "20260814_174744_OnePlus 12.jpg");
+        await fixture.CameraMappings.UpsertAsync(new CameraMapping { From = "OnePlus 12", To = "OnePlus12" });
+
+        // Something replaced the stored file outside MomentFerry. Renaming it would carry the
+        // operation's verification over to content that was never verified.
+        await File.WriteAllTextAsync(stored.DestinationPath!, "replaced content");
+
+        var result = await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: false);
+
+        Assert.Equal(1, result!.Skipped);
+        Assert.Equal(0, result.Renamed);
+        Assert.True(File.Exists(stored.DestinationPath!));
+        var sample = Assert.Single(result.Samples);
+        Assert.Contains("checksum", sample.Reason);
+        Assert.Equal(stored.DestinationPath, (await fixture.Operations.GetAsync(stored.Id))!.DestinationPath);
+    }
+
+    [Fact]
+    public async Task Rename_SkipsAnOperationWithNoRecordedChecksum()
+    {
+        var fixture = await CreateAsync();
+        var stored = await StoreAsync(fixture, "20260814_174744_OnePlus 12.jpg", withHash: false);
+        await fixture.CameraMappings.UpsertAsync(new CameraMapping { From = "OnePlus 12", To = "OnePlus12" });
+
+        var result = await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: false);
+
+        Assert.Equal(1, result!.Skipped);
+        Assert.Equal(0, result.Renamed);
+        Assert.True(File.Exists(stored.DestinationPath!));
     }
 
     [Fact]
@@ -102,8 +141,23 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         var sample = Assert.Single(result.Samples);
         Assert.Equal("20260814_174744_OnePlus 12.jpg", sample.From);
         Assert.Equal("20260814_174744_OnePlus12.jpg", sample.To);
+        Assert.Null(sample.Reason);
         Assert.True(File.Exists(stored.DestinationPath!));
         Assert.Equal(stored.DestinationPath, (await fixture.Operations.GetAsync(stored.Id))!.DestinationPath);
+    }
+
+    [Fact]
+    public async Task Rename_InDryRunReportsAChecksumMismatchInsteadOfPromisingTheRename()
+    {
+        var fixture = await CreateAsync();
+        var stored = await StoreAsync(fixture, "20260814_174744_OnePlus 12.jpg");
+        await fixture.CameraMappings.UpsertAsync(new CameraMapping { From = "OnePlus 12", To = "OnePlus12" });
+        await File.WriteAllTextAsync(stored.DestinationPath!, "replaced content");
+
+        var result = await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: true);
+
+        Assert.Equal(0, result!.Renamed);
+        Assert.Equal(1, result.Skipped);
     }
 
     [Fact]
@@ -146,12 +200,13 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
     public async Task Rename_ReturnsNullForAnUnknownEvent()
         => Assert.Null(await (await CreateAsync()).Service.RenameAsync(Guid.NewGuid(), dryRun: false));
 
-    private async Task<MediaOperation> StoreAsync(Fixture fixture, string storedName)
+    private async Task<MediaOperation> StoreAsync(Fixture fixture, string storedName, bool withHash = true)
     {
         var destinationFolder = Path.Combine(fixture.DestinationRoot, "Kroatien 2026");
         Directory.CreateDirectory(destinationFolder);
         var destinationPath = Path.Combine(destinationFolder, storedName);
-        await File.WriteAllTextAsync(destinationPath, "verified content");
+        await File.WriteAllTextAsync(destinationPath, StoredContent);
+        var hash = withHash ? await HashOfAsync(destinationPath) : null;
 
         var operation = new MediaOperation
         {
@@ -160,13 +215,19 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             State = MediaOperationState.Completed,
             SourcePath = fixture.Media.SourcePath,
             DestinationPath = destinationPath,
-            SourceHash = "hash",
-            DestinationHash = "hash",
+            SourceHash = hash,
+            DestinationHash = hash,
             StartedAt = fixture.Event.StartAt,
             CompletedAt = fixture.Event.StartAt.AddMinutes(1)
         };
         await fixture.Operations.UpsertAsync(operation);
         return operation;
+    }
+
+    private static async Task<string> HashOfAsync(string path)
+    {
+        await using var stream = File.OpenRead(path);
+        return await new Sha256HashService().ComputeSha256Async(stream);
     }
 
     private async Task<Fixture> CreateAsync()
@@ -227,7 +288,7 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             SourceShareId = sourceShare.Id,
             SourcePath = Path.Combine(sourceRoot, "IMG20260814174744.jpg"),
             OriginalName = "IMG20260814174744.jpg",
-            Size = "verified content".Length,
+            Size = StoredContent.Length,
             Extension = ".jpg",
             MediaType = MediaType.Image,
             CapturedAt = capturedAt,
@@ -245,7 +306,8 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             events,
             shares,
             new RenameContextFactory(presets, cameraMappings),
-            new LocalFileSystemGateway());
+            new LocalFileSystemGateway(),
+            new Sha256HashService());
 
         return new Fixture(
             service,
