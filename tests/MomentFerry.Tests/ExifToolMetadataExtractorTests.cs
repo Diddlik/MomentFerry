@@ -51,6 +51,48 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task QuickTimeDateWithoutOffset_ReportsNoOffsetBecauseTheClockIsUnknown()
+    {
+        // The instant is certain, the wall-clock time on the camera is not. Reporting zero here pinned
+        // UTC as if the recording had declared it, and named a 15:10 video 20260812_131000.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","MediaCreateDate":"2026:04:21 12:00:28"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal(new DateTimeOffset(2026, 4, 21, 12, 0, 28, TimeSpan.Zero), metadata.CapturedAt);
+        Assert.False(metadata.TimeZoneInferred);
+        Assert.Null(metadata.ReportedUtcOffset);
+    }
+
+    [Fact]
+    public async Task SamsungRecordedOffset_IsReportedBecauseTheFileStatesIt()
+    {
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","MediaCreateDate":"2026:08:12 13:10:51","SamsungAndroidUtcOffset":"+02:00"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal(TimeSpan.FromHours(2), metadata.ReportedUtcOffset);
+        Assert.Equal(15, metadata.CapturedAt!.Value.Hour);
+    }
+
+    [Fact]
+    public async Task PhotoWithoutAnOffsetTag_ReportsNone_SoTheShareZoneCanStandIn()
+    {
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.jpg","DateTimeOriginal":"2026:08:21 13:52:53"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.jpg", MediaType.Image);
+
+        Assert.True(metadata.TimeZoneInferred);
+        Assert.Null(metadata.ReportedUtcOffset);
+    }
+
+    [Fact]
     public async Task PhotoWithAZoneThatCannotBeResolved_FallsBackToUtcInsteadOfThrowing()
     {
         // Without tzdata even a correct id like Europe/Berlin throws, and a routing cycle that dies on

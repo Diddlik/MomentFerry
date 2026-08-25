@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.12] - 2026-08-25
+
+### Fixed
+
+- videos were named two hours before the clock they show. A QuickTime timestamp is a certain instant in UTC and says nothing about the wall-clock time on the camera, but the extractor reported that as a known offset of zero, so 1.11.8 pinned UTC for the name and the share's zone could never stand in. The two questions are now answered separately: whether the instant is trustworthy, and whether the file actually stated the offset it was taken at. Only an offset the file states is recorded — Samsung's tag, or a `CreationDate`/`OffsetTimeOriginal` that carries one — and everything else falls back to the share's zone when a name is rendered. Files already indexed keep the offset they were recorded with until *Read metadata again* re-reads them.
+
 ## [1.11.11] - 2026-08-25
 
 ### Fixed

@@ -228,11 +228,11 @@ public sealed class RoutedFileRenameService(
             return mediaFile;
         }
 
-        // An inferred zone is the share's zone guessed on the way in, not something the file said, so
-        // recording it would dress an assumption up as evidence.
-        if (read.CapturedAt is not { } captured || read.TimeZoneInferred) return mediaFile;
+        // Only an offset the file stated is evidence. A guessed zone, or a QuickTime instant that
+        // happens to be UTC, would otherwise be pinned as if the camera had declared it.
+        if (read.ReportedUtcOffset is not { } reported) return mediaFile;
 
-        var updated = WithCaptureOffset(mediaFile, (int)captured.Offset.TotalMinutes);
+        var updated = WithCaptureOffset(mediaFile, (int)reported.TotalMinutes);
         if (!dryRun) await mediaFiles.UpsertAsync(updated, cancellationToken);
         return updated;
     }

@@ -79,12 +79,13 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
             }
 
             var root = document.RootElement[0];
-            var (capturedAt, source, inferred) = ResolveTimestamp(root, share, mediaType);
+            var (capturedAt, source, inferred, reportedOffset) = ResolveTimestamp(root, share, mediaType);
 
             return new MediaMetadata(
                 capturedAt,
                 source,
                 inferred,
+                reportedOffset,
                 GetString(root, "Make") ?? GetString(root, "AndroidManufacturer"),
                 ResolveModel(root),
                 GetInt32(root, "ImageWidth"),
@@ -121,7 +122,13 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
         return GetString(root, "Author") ?? samsungModel;
     }
 
-    private static (DateTimeOffset? Value, string? Source, bool Inferred) ResolveTimestamp(
+    /// <summary>
+    /// Resolves the capture instant, and reports separately whether the file itself stated the offset
+    /// it was taken at. The two are not the same question: a QuickTime video's MediaCreateDate is a
+    /// certain instant in UTC and says nothing about the wall-clock time on the camera, so pinning
+    /// offset zero from it would name the file two hours before the clock the recording shows.
+    /// </summary>
+    private static (DateTimeOffset? Value, string? Source, bool Inferred, TimeSpan? ReportedOffset) ResolveTimestamp(
         JsonElement root,
         Share share,
         MediaType mediaType)
@@ -153,7 +160,9 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
 
             if (TryParseWithOffset(raw, out var absolute))
             {
-                return (absolute, field, false);
+                // The value carried its own offset: OffsetTimeOriginal for a photo, CreationDate for a
+                // recording. That is the camera's own statement about its clock.
+                return (absolute, field, false, absolute.Offset);
             }
 
             if (!TryParseLocal(raw, out var local))
@@ -171,7 +180,10 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 return (
                     recordedOffset is null ? instant : instant.ToOffset(recordedOffset.Value),
                     field,
-                    false);
+                    false,
+                    // Only Samsung's tag states the zone it was filmed in. Without it the instant is
+                    // certain and the wall-clock offset is unknown, which is not the same as zero.
+                    recordedOffset);
             }
 
             // A photo timestamp really is local wall-clock time with nothing to anchor it, so the
@@ -191,10 +203,10 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 offset = TimeSpan.Zero;
             }
 
-            return (new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset), field, true);
+            return (new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset), field, true, null);
         }
 
-        return (null, null, false);
+        return (null, null, false, null);
     }
 
     /// <summary>

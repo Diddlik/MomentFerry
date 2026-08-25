@@ -156,6 +156,7 @@ public sealed class RoutingPreviewServiceTests : IDisposable
                 clock.UtcNow,
                 "DateTimeOriginal",
                 false,
+                TimeSpan.Zero,
                 null,
                 null,
                 null,
@@ -194,7 +195,7 @@ public sealed class RoutingPreviewServiceTests : IDisposable
             try
             {
                 if (delayMilliseconds > 0) await Task.Delay(delayMilliseconds, cancellationToken);
-                return new MediaMetadata(clock.UtcNow, "DateTimeOriginal", false, null, null, null, null, null, "image/jpeg");
+                return new MediaMetadata(clock.UtcNow, "DateTimeOriginal", false, TimeSpan.Zero, null, null, null, null, null, "image/jpeg");
             }
             finally
             {

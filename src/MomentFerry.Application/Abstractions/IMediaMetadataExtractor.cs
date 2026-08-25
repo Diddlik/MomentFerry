@@ -15,6 +15,12 @@ public sealed record MediaMetadata(
     DateTimeOffset? CapturedAt,
     string? TimestampSource,
     bool TimeZoneInferred,
+    /// <summary>
+    /// The offset the file itself stated, or null when it stated none. Distinct from
+    /// <paramref name="TimeZoneInferred"/>: a QuickTime video's UTC timestamp is a certain instant
+    /// whose wall-clock offset is unknown, and recording zero for it names the file in UTC.
+    /// </summary>
+    TimeSpan? ReportedUtcOffset,
     string? CameraMake,
     string? CameraModel,
     int? Width,

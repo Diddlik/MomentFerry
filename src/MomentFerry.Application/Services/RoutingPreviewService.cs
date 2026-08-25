@@ -153,12 +153,15 @@ public sealed class RoutingPreviewService(
                 MediaType = file.MediaType,
                 CapturedAt = capturedAt,
                 TimestampSource = timestampSource,
-                // Kept beside the normalised instant so a filename can carry the wall-clock time the
-                // camera wrote. An indexed value that predates this column has none, and the share's
+                // Only an offset the file itself stated is recorded. A QuickTime timestamp is a certain
+                // instant in UTC that says nothing about the clock on the camera, so pinning zero from
+                // it would name a recording two hours before the time it shows; left null, the share's
                 // zone stands in when the name is rendered.
-                CapturedAtOffsetMinutes = extracted?.CapturedAt is { } fresh
-                    ? (int)fresh.Offset.TotalMinutes
-                    : existing?.CapturedAtOffsetMinutes,
+                CapturedAtOffsetMinutes = extracted is null
+                    ? existing?.CapturedAtOffsetMinutes
+                    : extracted.ReportedUtcOffset is { } reported
+                        ? (int)reported.TotalMinutes
+                        : null,
                 IsTimezoneInferred = extracted is null
                     ? existing?.IsTimezoneInferred ?? true
                     : extracted.TimeZoneInferred || extracted.CapturedAt is null,

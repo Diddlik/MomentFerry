@@ -473,6 +473,8 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
                 captured,
                 captured is null ? null : "DateTimeOriginal",
                 captured is null,
+                // The stub stands for a file that states its own offset, or states none at all.
+                captured?.Offset,
                 "OnePlus",
                 "OnePlus 12",
                 null,
