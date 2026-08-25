@@ -79,6 +79,22 @@ public sealed class SafeTransferService(
             var sourceHash = await HashPathAsync(mediaFile.SourcePath, cancellationToken);
             await PersistMediaHashAsync(mediaFile, sourceHash, cancellationToken);
 
+            // The destination may already hold this content under a different name: the name a file
+            // renders to now need not be the name it was stored under, because a changed preset, a
+            // changed camera mapping or a taken sequence number all produce a different one. The
+            // history is only asked where the content went; the file there decides, by hash.
+            var storedCopy = await FindStoredCopyAsync(mediaFile.Id, sourceHash, cancellationToken);
+            if (storedCopy is not null)
+            {
+                var handled = await HandleIdenticalDestinationAsync(
+                    operation,
+                    storedCopy,
+                    sourceHash,
+                    mediaEvent,
+                    cancellationToken);
+                if (handled is not null) return handled;
+            }
+
             var conflict = await ResolveExistingDestinationAsync(
                 desiredDestination,
                 sourceHash,
@@ -234,30 +250,6 @@ public sealed class SafeTransferService(
         MediaEvent mediaEvent,
         CancellationToken cancellationToken)
     {
-        // A source file whose content MomentFerry already wrote to a destination is its own output
-        // arriving back on a source share. Deleting it as a duplicate of itself hides the loop that
-        // brought it there, and where source and destination are mirrored the deletion travels back
-        // onto the destination copy. Hold it for a human instead.
-        var ownOutput = await operations.FindCompletedByDestinationHashAsync(
-            sourceHash,
-            operation.MediaFileId,
-            cancellationToken);
-        if (ownOutput is not null)
-        {
-            var held = Transition(
-                operation,
-                MediaOperationState.Quarantined,
-                destinationPath: existingPath,
-                sourceHash: sourceHash,
-                destinationHash: sourceHash,
-                lastError:
-                    $"This file is MomentFerry's own output returning to a source share: its content was " +
-                    $"already routed to '{ownOutput.DestinationPath}'. The source was kept, because something " +
-                    "is copying the destination back into the source.");
-            await operations.UpsertAsync(held, cancellationToken);
-            return new TransferExecutionResult(held, false, false, held.LastError);
-        }
-
         if (mediaEvent.DuplicateStrategy == DuplicateStrategy.KeepBoth)
             return null;
 
@@ -352,6 +344,26 @@ public sealed class SafeTransferService(
         if (mediaFile.CapturedAt < mediaEvent.StartAt ||
             (mediaEvent.EndAt is not null && mediaFile.CapturedAt > mediaEvent.EndAt))
             throw new InvalidOperationException("Media capture time is outside the event window.");
+    }
+
+    /// <summary>
+    /// Reports the destination that already holds this exact content, under whatever name, or null.
+    /// The operation history only supplies the path to look at: the file there is stat'ed and re-hashed,
+    /// so a destination copy that was renamed, changed or lost never stops a transfer. What happens to
+    /// the source is then the event's duplicate policy, not this method's decision.
+    /// </summary>
+    private async Task<string?> FindStoredCopyAsync(
+        Guid mediaFileId,
+        string sourceHash,
+        CancellationToken cancellationToken)
+    {
+        var stored = await operations.FindByDestinationHashAsync(sourceHash, mediaFileId, cancellationToken);
+        if (stored?.DestinationPath is null || !fileSystem.FileExists(stored.DestinationPath)) return null;
+
+        var storedHash = await HashPathAsync(stored.DestinationPath, cancellationToken);
+        return string.Equals(storedHash, sourceHash, StringComparison.OrdinalIgnoreCase)
+            ? stored.DestinationPath
+            : null;
     }
 
     private async Task<DestinationConflict> ResolveExistingDestinationAsync(

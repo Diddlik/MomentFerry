@@ -11,11 +11,13 @@ public interface IMediaOperationRepository
     Task<MediaOperation?> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<MediaOperation?> GetIncompleteByMediaFileAsync(Guid mediaFileId, CancellationToken cancellationToken = default);
     /// <summary>
-    /// Finds a completed operation that wrote this exact content to a destination, ignoring the media
-    /// file asking. A hit means the candidate is MomentFerry's own output arriving back on a source
-    /// share, which must never be deleted as a duplicate of itself.
+    /// Finds an operation that verified this exact content at a destination, ignoring the media file
+    /// asking, and reports where it put it. The caller must still check that file on disk: this only
+    /// says where to look. Superseded operations count, because a route-again marks every earlier
+    /// operation of an event as superseded and that is exactly the moment its files are all
+    /// transferred again.
     /// </summary>
-    Task<MediaOperation?> FindCompletedByDestinationHashAsync(
+    Task<MediaOperation?> FindByDestinationHashAsync(
         string destinationHash,
         Guid excludedMediaFileId,
         CancellationToken cancellationToken = default);

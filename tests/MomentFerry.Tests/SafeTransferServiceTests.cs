@@ -129,25 +129,72 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SafeMove_WhenItsOwnOutputReturnsToTheSource_HoldsItInsteadOfDeletingIt()
+    public async Task SafeMove_WhenTheContentIsAlreadyStoredUnderAnotherNameAfterRouteAgain_RemovesTheSourceWithoutASecondCopy()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+        var destinationFolder = Path.GetDirectoryName(first.Operation.DestinationPath!)!;
+
+        // Routed media is copied back into the source share to retest it, under a name that renders to
+        // a different destination than the one it was stored under, and a route-again marks every
+        // finished operation of the event as superseded. Neither may hide the copy that is already
+        // there: nothing collides at the resolved path, so a name-only check writes a second file.
+        var returnedPath = Path.Combine(SourceDirectory, "copied-back.jpg");
+        await File.WriteAllBytesAsync(returnedPath, fixture.SourceBytes);
+        var returned = await UpsertReturnedCopyAsync(fixture, returnedPath);
+        Assert.Equal(
+            1,
+            await fixture.Operations.SupersedeTerminalByEventAsync(
+                fixture.Event.Id,
+                "Superseded by an explicit route-again request for the whole event.",
+                fixture.Event.StartAt.AddDays(2)));
+
+        var second = await fixture.Service.ExecuteAsync(returned.Id, fixture.Event.Id);
+
+        Assert.Equal(MediaOperationState.Completed, second.Operation.State);
+        Assert.True(second.SourceDeleted);
+        Assert.False(File.Exists(returnedPath));
+        Assert.Equal(first.Operation.DestinationPath, second.Operation.DestinationPath);
+        Assert.Equal(
+            first.Operation.DestinationPath,
+            Assert.Single(Directory.GetFiles(destinationFolder)));
+    }
+
+    [Fact]
+    public async Task SafeMove_WhenTheStoredCopyIsGoneFromTheDestination_RoutesTheSourceAgain()
     {
         var fixture = await CreateFixtureAsync();
         var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
         Assert.Equal(MediaOperationState.Completed, first.Operation.State);
 
-        // Something mirrors the destination back into the source share, under the name MomentFerry
-        // gave the file. It arrives as a new media file with identical content.
-        var mirrorDirectory = Path.Combine(SourceDirectory, "mirrored");
-        Directory.CreateDirectory(mirrorDirectory);
-        var returnedPath = Path.Combine(mirrorDirectory, Path.GetFileName(first.Operation.DestinationPath!));
+        // The history still claims this content was stored, but the destination lost it. The file on
+        // disk decides, not the record, so the source must be routed rather than treated as a
+        // duplicate of something that is no longer there.
+        File.Delete(first.Operation.DestinationPath!);
+        var returnedPath = Path.Combine(SourceDirectory, "copied-back.jpg");
         await File.WriteAllBytesAsync(returnedPath, fixture.SourceBytes);
+        var returned = await UpsertReturnedCopyAsync(fixture, returnedPath);
+
+        var second = await fixture.Service.ExecuteAsync(returned.Id, fixture.Event.Id);
+
+        Assert.Equal(MediaOperationState.Completed, second.Operation.State);
+        Assert.True(second.SourceDeleted);
+        Assert.True(second.DestinationCreated);
+        Assert.False(File.Exists(returnedPath));
+        Assert.True(File.Exists(second.Operation.DestinationPath!));
+        Assert.Equal(fixture.SourceBytes, File.ReadAllBytes(second.Operation.DestinationPath!));
+    }
+
+    private async Task<MediaFile> UpsertReturnedCopyAsync(Fixture fixture, string returnedPath)
+    {
         var returned = new MediaFile
         {
             Id = Guid.NewGuid(),
             SourceShareId = fixture.Media.SourceShareId,
             SourcePath = returnedPath,
             OriginalName = Path.GetFileName(returnedPath),
-            Size = fixture.SourceBytes.Length,
+            Size = new FileInfo(returnedPath).Length,
             Extension = Path.GetExtension(returnedPath),
             MediaType = MediaType.Image,
             CapturedAt = fixture.Media.CapturedAt,
@@ -156,14 +203,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             LastSeenAt = fixture.Media.LastSeenAt
         };
         await fixture.MediaFiles.UpsertAsync(returned);
-
-        var second = await fixture.Service.ExecuteAsync(returned.Id, fixture.Event.Id);
-
-        Assert.Equal(MediaOperationState.Quarantined, second.Operation.State);
-        Assert.False(second.SourceDeleted);
-        Assert.Contains("own output", second.Operation.LastError);
-        Assert.True(File.Exists(returnedPath));
-        Assert.True(File.Exists(first.Operation.DestinationPath!));
+        return returned;
     }
 
     [Fact]
@@ -441,8 +481,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.GetAsync(id, cancellationToken);
         public Task<MediaOperation?> GetIncompleteByMediaFileAsync(Guid mediaFileId, CancellationToken cancellationToken = default) =>
             inner.GetIncompleteByMediaFileAsync(mediaFileId, cancellationToken);
-        public Task<MediaOperation?> FindCompletedByDestinationHashAsync(string destinationHash, Guid excludedMediaFileId, CancellationToken cancellationToken = default) =>
-            inner.FindCompletedByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
+        public Task<MediaOperation?> FindByDestinationHashAsync(string destinationHash, Guid excludedMediaFileId, CancellationToken cancellationToken = default) =>
+            inner.FindByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
         public Task<int> SupersedeTerminalByEventAsync(Guid eventId, string reason, DateTimeOffset supersededAt, CancellationToken cancellationToken = default) =>
             inner.SupersedeTerminalByEventAsync(eventId, reason, supersededAt, cancellationToken);
         public Task<bool> HasTerminalOperationAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>

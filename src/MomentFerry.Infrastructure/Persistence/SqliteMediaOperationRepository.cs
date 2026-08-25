@@ -95,7 +95,7 @@ public sealed class SqliteMediaOperationRepository(SqliteConnectionFactory conne
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
     }
 
-    public async Task<MediaOperation?> FindCompletedByDestinationHashAsync(
+    public async Task<MediaOperation?> FindByDestinationHashAsync(
         string destinationHash,
         Guid excludedMediaFileId,
         CancellationToken cancellationToken = default)
@@ -104,16 +104,22 @@ public sealed class SqliteMediaOperationRepository(SqliteConnectionFactory conne
 
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
+        // Only states that prove the bytes reached a destination: a verification quarantine can record
+        // the hash of a staging file that was never committed.
         command.CommandText = $"""
             SELECT {SelectColumns} FROM operations
             WHERE destination_hash = $destinationHash COLLATE NOCASE
               AND media_file_id <> $excludedMediaFileId
-              AND state = $completed
+              AND state IN ($committed, $finalizePending, $completed, $ignored, $superseded)
             ORDER BY updated_at_utc LIMIT 1;
             """;
         command.Parameters.AddWithValue("$destinationHash", destinationHash);
         command.Parameters.AddWithValue("$excludedMediaFileId", excludedMediaFileId.ToString("D"));
+        command.Parameters.AddWithValue("$committed", (int)MediaOperationState.DestinationCommitted);
+        command.Parameters.AddWithValue("$finalizePending", (int)MediaOperationState.SourceFinalizePending);
         command.Parameters.AddWithValue("$completed", (int)MediaOperationState.Completed);
+        command.Parameters.AddWithValue("$ignored", (int)MediaOperationState.Ignored);
+        command.Parameters.AddWithValue("$superseded", (int)MediaOperationState.Failed);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
     }

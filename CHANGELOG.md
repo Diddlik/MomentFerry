@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.1] - 2026-08-25
+
+### Fixed
+
+- routed media put back into a source share was stored a second time, under a different name, instead of being recognised as content the destination already holds. The check for it only ran when the returned file rendered to exactly the name it was stored under, and it ignored operations that a *Route again* had marked as superseded — the two conditions that hold precisely when an album is copied back to retest it. On the installation this was found on, one retest wrote 213 duplicate files into the destination and left 224 files in the source, each with a finished operation that made every later cycle skip them. The content is now looked up before the destination name is resolved and whatever became of the earlier operation, and the copy it points at is stat'ed and re-hashed on disk rather than trusted from the record: a source whose content is verifiably already stored follows the event's duplicate policy — *Safe move to existing* removes it — and a source whose stored copy is gone or changed is routed again.
+
 ## [1.11.0] - 2026-08-24
 
 ### Added
