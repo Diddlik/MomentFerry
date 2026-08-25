@@ -230,6 +230,9 @@ public sealed class DestinationPathResolverTests
         }
     }
 
+    // Both copies carry every field the resolver reads. Dropping DefaultTimeZone here made the
+    // zone-fallback test pass on a machine that happens to run in the zone it asserts, and fail
+    // anywhere else.
     private static Share CopyWithPreset(Share share, Guid presetId) => new()
     {
         Id = share.Id,
@@ -239,6 +242,7 @@ public sealed class DestinationPathResolverTests
         Owner = share.Owner,
         ImageSubfolder = share.ImageSubfolder,
         VideoSubfolder = share.VideoSubfolder,
+        DefaultTimeZone = share.DefaultTimeZone,
         RenamePresetId = presetId
     };
 

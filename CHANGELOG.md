@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.9] - 2026-08-25
+
+### Fixed
+
+- no functional change. The test covering the time-zone fallback asserted the zone of the machine it ran on: a helper that copies a share dropped its configured zone, so the assertion only held on a host already running in that zone and failed everywhere else. The suite now passes under any `TZ`.
+
 ## [1.11.8] - 2026-08-25
 
 ### Fixed
