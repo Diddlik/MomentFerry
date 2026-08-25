@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.6] - 2026-08-25
+
+### Added
+
+- **Rename stored files**, per event. Naming happens on the way to the destination, so a rename preset or a camera mapping added afterwards never reached the media that was already stored — and *Route again* cannot repair those names either, because it needs a source to re-route and Safe Move released the sources once their copies were verified. This renames the stored files where they lie and moves the operation history with them, so each record keeps pointing at the copy it verified. A file is renamed only when the name the current rules produce is free: nothing is overwritten and no content is read. Under Dry Run the button reports the plan and touches nothing. Found while a camera reporting its marketing name (`OnePlus 12`) rather than its model code left 404 files stored under a name the mapping added later would have fixed.
+
 ## [1.11.5] - 2026-08-25
 
 ### Fixed

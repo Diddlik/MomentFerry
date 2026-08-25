@@ -90,6 +90,7 @@ Real filesystem copies keep a free-space reserve **in addition to the file being
 - SHA-256 duplicate verification, including content the destination already holds under another name
 - filename conflict handling
 - filename templates per share, with camera-name mappings and a live preview
+- re-applying the current naming rules to files an event already stored
 - per-share media extensions and separate image/video destination subfolders
 - destination files stamped with the capture time
 - Safe Move and Copy
@@ -181,6 +182,7 @@ POST /api/v1/events/quick-start
 POST /api/v1/events/quick-stop
 POST /api/v1/events/{id}/backfill
 POST /api/v1/events/{id}/route-again
+POST /api/v1/events/{id}/rename-routed
 POST /api/v1/automation/run
 GET  /api/v1/operations
 GET  /api/v1/operations/export.csv

@@ -152,6 +152,30 @@ public sealed class SqliteMediaOperationRepository(SqliteConnectionFactory conne
         return results;
     }
 
+    public async Task<IReadOnlyList<MediaOperation>> ListCompletedByEventAsync(
+        Guid eventId,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new List<MediaOperation>();
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {SelectColumns} FROM operations
+            WHERE event_id = $eventId
+              AND state = $completed
+            ORDER BY updated_at_utc DESC;
+            """;
+        command.Parameters.AddWithValue("$eventId", eventId.ToString("D"));
+        command.Parameters.AddWithValue("$completed", (int)MediaOperationState.Completed);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(Read(reader));
+        }
+
+        return results;
+    }
+
     public async Task<int> SupersedeTerminalByEventAsync(
         Guid eventId,
         string reason,

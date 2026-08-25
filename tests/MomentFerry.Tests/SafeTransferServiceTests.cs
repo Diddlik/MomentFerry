@@ -509,6 +509,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.SupersedeTerminalByEventAsync(eventId, reason, supersededAt, cancellationToken);
         public Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
             inner.ListTerminalAsync(mediaFileId, eventId, cancellationToken);
+        public Task<IReadOnlyList<MediaOperation>> ListCompletedByEventAsync(Guid eventId, CancellationToken cancellationToken = default) =>
+            inner.ListCompletedByEventAsync(eventId, cancellationToken);
 
         public Task<int> DeleteFinishedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken = default) =>
             inner.DeleteFinishedBeforeAsync(cutoff, cancellationToken);

@@ -39,6 +39,7 @@ builder.Services.AddSingleton<TransferCoordinator>();
 builder.Services.AddSingleton<OperationRecoveryService>();
 builder.Services.AddSingleton<EventControlService>();
 builder.Services.AddSingleton<QuarantineService>();
+builder.Services.AddSingleton<RoutedFileRenameService>();
 var automationStatusPath = builder.Configuration["MomentFerry:Automation:StatusPath"] ?? "data/automation-status.json";
 builder.Services.AddSingleton(sp => new AutomationStatus(
     automationStatusPath,

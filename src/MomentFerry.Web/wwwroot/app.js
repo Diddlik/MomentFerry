@@ -966,6 +966,7 @@ function renderEvents() {
             <button class="btn btn-sm btn-ghost" type="button" onclick="editEvent('${event.id}')">${t('Edit')}</button>
             <button class="btn btn-sm btn-ghost" type="button" onclick="backfillEvent('${event.id}')" title="${escapeHtml(t("Scan the source shares and route media already captured in this event's window"))}">${t('Sort existing media')}</button>
             ${appInfo.dryRun ? '' : `<button class="btn btn-sm btn-ghost" type="button" onclick="routeEventAgain('${event.id}')" title="${escapeHtml(t('Clear the finished mark on the files of this event and route them all again under the current rules'))}">${t('Route again')}</button>`}
+            <button class="btn btn-sm btn-ghost" type="button" onclick="renameRoutedFiles('${event.id}')" title="${escapeHtml(t('Apply the current naming rules to the files this event already stored'))}">${t('Rename stored files')}</button>
             ${event.status === 'Active'
               ? `<button class="btn btn-sm" type="button" onclick="stopEvent('${event.id}')">${t('Stop')}</button>`
               : (canStart ? `<button class="btn btn-sm" type="button" onclick="startEvent('${event.id}')">${startLabel}</button>` : '')}
@@ -1378,6 +1379,38 @@ window.routeEventAgain = async function (id) {
         (summary.errors ? ` · ${t(summary.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(summary.errors) })}` : ''));
     });
     await Promise.all([reloadEvents(), refreshQuarantine()]);
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.renameRoutedFiles = async function (id) {
+  const event = events.find(x => x.id === id);
+  if (!event) return;
+
+  if (!confirm(
+    t('Apply the current naming rules to the files “{{name}}” already stored?', { name: event.name }) + '\n\n' +
+    t('MomentFerry names files on the way to the destination, so a preset or camera mapping added later never reached what was already stored. Route again cannot reach them either once Safe Move released their sources.') + '\n\n' +
+    t('Only a file whose new name is free is renamed. Nothing is overwritten, no content is read, and the operation history follows each file to its new name.'))) {
+    return;
+  }
+
+  try {
+    const result = await runBackgroundTask(
+      `rename-routed-${id}`,
+      `${t('Rename stored files')}: ${event.name}`,
+      'events',
+      () => request(`/api/v1/events/${id}/rename-routed`, { method: 'POST' }));
+    const renamed = result.dryRun
+      ? t('{{count}} would be renamed (Dry Run)', { count: formatNumber(result.renamed) })
+      : t('{{count}} renamed', { count: formatNumber(result.renamed) });
+    alert(
+      t('Renaming finished for “{{name}}”.', { name: event.name }) + '\n\n' +
+      t('{{count}} examined', { count: formatNumber(result.examined) }) + ' · ' + renamed + ' · ' +
+      t('{{count}} already correct', { count: formatNumber(result.unchanged) }) + ' · ' +
+      t('{{count}} skipped', { count: formatNumber(result.skipped) }) +
+      (result.errors ? ` · ${t(result.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(result.errors) })}` : ''));
+    await refreshOperations();
   } catch (error) {
     alert(error.message);
   }

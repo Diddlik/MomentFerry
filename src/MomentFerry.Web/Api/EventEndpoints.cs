@@ -123,6 +123,25 @@ public static class EventEndpoints
             });
         });
 
+        // Renaming happens on the way to the destination, so a preset or camera mapping added later
+        // never reached the files an event already stored, and a route-again cannot reach them either
+        // once Safe Move released their sources. This renames the stored copies where they lie. It runs
+        // in Dry Run too, where it reports the plan and touches nothing.
+        group.MapPost("/{id:guid}/rename-routed", async (
+            Guid id,
+            RoutedFileRenameService renamer,
+            IRuntimeSettingsStore settings,
+            AutomationStatus automationStatus,
+            CancellationToken ct) =>
+        {
+            if (automationStatus.Snapshot().CycleRunning)
+                return Results.Conflict(new { error = "An automation cycle is already running." });
+
+            var runtime = await settings.GetAsync(ct);
+            var result = await renamer.RenameAsync(id, runtime.DryRun, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        });
+
         group.MapPost("/{id:guid}/start", async (
             Guid id,
             EventControlService control,
