@@ -431,6 +431,10 @@ public sealed class SafeTransferService(
             MediaType = mediaFile.MediaType,
             CapturedAt = mediaFile.CapturedAt,
             TimestampSource = mediaFile.TimestampSource,
+            // Written straight through rather than COALESCEd in SQL, so a re-index can still correct
+            // it; forgetting it here would blank the offset every time a hash is recorded.
+            CapturedAtOffsetMinutes = mediaFile.CapturedAtOffsetMinutes,
+            SourceLastWriteAt = mediaFile.SourceLastWriteAt,
             IsTimezoneInferred = mediaFile.IsTimezoneInferred,
             Sha256 = hash,
             FirstSeenAt = mediaFile.FirstSeenAt,

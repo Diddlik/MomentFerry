@@ -4,7 +4,7 @@ namespace MomentFerry.Infrastructure.Persistence;
 
 public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connectionFactory) : IDatabaseInitializer
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     private static readonly IReadOnlyList<SqliteMigration> Migrations =
     [
@@ -150,6 +150,15 @@ public sealed class SqliteDatabaseInitializer(SqliteConnectionFactory connection
             ALTER TABLE shares ADD COLUMN rename_preset_id TEXT NULL;
             ALTER TABLE media_files ADD COLUMN camera_make TEXT NULL;
             ALTER TABLE media_files ADD COLUMN camera_model TEXT NULL;
+            """),
+        // captured_at_utc stays the absolute instant, because event matching and the capture-window
+        // requeue compare it as text and mixed offsets would break both. The offset EXIF reported is
+        // kept beside it so a filename can carry the wall-clock time the camera wrote.
+        new SqliteMigration(
+            5,
+            "media-capture-offset",
+            """
+            ALTER TABLE media_files ADD COLUMN captured_at_offset_minutes INTEGER NULL;
             """)
     ];
 

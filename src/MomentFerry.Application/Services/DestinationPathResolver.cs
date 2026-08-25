@@ -15,7 +15,7 @@ public sealed class DestinationPathResolver(IFileSystemGateway? fileSystem = nul
         MediaFile mediaFile,
         RenameContext? rename = null)
     {
-        var captured = mediaFile.CapturedAt ?? DateTimeOffset.UtcNow;
+        var captured = LocalCapture(mediaFile, sourceShare);
         var folder = mediaEvent.DestinationFolderTemplate
             .Replace("{event.name}", SafeSegment(mediaEvent.Name), StringComparison.OrdinalIgnoreCase)
             .Replace("{event.type}", SafeSegment(mediaEvent.Type ?? "Event"), StringComparison.OrdinalIgnoreCase)
@@ -49,6 +49,36 @@ public sealed class DestinationPathResolver(IFileSystemGateway? fileSystem = nul
         var combined = Path.GetFullPath(Path.Combine(targetDirectory, fileName));
         EnsureInsideRoot(root, combined);
         return combined;
+    }
+
+    /// <summary>
+    /// The capture time as wall-clock time where it was taken. <see cref="MediaFile.CapturedAt"/> is
+    /// normalised to UTC so events and range queries compare one instant, but a name built from that
+    /// carries a time the camera never showed: a photo taken at 13:52 in Berlin was stored as
+    /// 20260821_115253. The offset the file reported is used when it exists, and otherwise the share's
+    /// zone stands in — the same assumption the extractor already makes for a photo without one.
+    /// </summary>
+    private static DateTimeOffset LocalCapture(MediaFile mediaFile, Share sourceShare)
+    {
+        var captured = mediaFile.CapturedAt ?? DateTimeOffset.UtcNow;
+        if (mediaFile.CapturedAtOffsetMinutes is { } minutes)
+        {
+            return captured.ToOffset(TimeSpan.FromMinutes(minutes));
+        }
+
+        try
+        {
+            var zoneId = string.IsNullOrWhiteSpace(sourceShare.DefaultTimeZone)
+                ? TimeZoneInfo.Local.Id
+                : sourceShare.DefaultTimeZone;
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
+            return captured.ToOffset(zone.GetUtcOffset(captured));
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            // A misconfigured zone must not stop a transfer; the instant is still a usable name.
+            return captured;
+        }
     }
 
     /// <summary>

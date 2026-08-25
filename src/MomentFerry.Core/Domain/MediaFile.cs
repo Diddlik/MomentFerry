@@ -11,6 +11,14 @@ public sealed class MediaFile
     public MediaType MediaType { get; init; }
     public DateTimeOffset? CapturedAt { get; init; }
     public string? TimestampSource { get; init; }
+
+    /// <summary>
+    /// The UTC offset the capture time was recorded in, when the file said so. <see cref="CapturedAt"/>
+    /// is normalised to UTC for matching and range queries, which loses the offset; a filename has to
+    /// carry the wall-clock time the camera wrote, so the offset is kept here rather than re-derived.
+    /// Null means the file named no offset and the share's zone stands in.
+    /// </summary>
+    public int? CapturedAtOffsetMinutes { get; init; }
     public bool IsTimezoneInferred { get; init; }
     public string? Sha256 { get; init; }
 

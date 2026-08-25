@@ -24,7 +24,8 @@ public sealed class RoutedFileRenameService(
     IShareRepository shares,
     RenameContextFactory renameContexts,
     IFileSystemGateway fileSystem,
-    IHashService hashes)
+    IHashService hashes,
+    IMediaMetadataExtractor metadata)
 {
     /// <summary>How many individual decisions are reported back; the counts always cover everything.</summary>
     private const int MaxSamples = 50;
@@ -79,6 +80,15 @@ public sealed class RoutedFileRenameService(
                 skipped++;
                 Sample(samples, reasons, current, null, "The share or media record behind this file is gone.");
                 continue;
+            }
+
+            // Rows indexed before the offset was persisted carry none, and their sources are usually
+            // gone, so nothing can re-read them there. The stored copy is byte-identical to the source
+            // that produced it, so the offset is read from that instead of assumed from the share's
+            // zone. Once persisted it never has to be read again.
+            if (mediaFile.CapturedAtOffsetMinutes is null && mediaFile.CapturedAt is not null)
+            {
+                mediaFile = await BackfillOffsetAsync(mediaFile, sourceShare, current, dryRun, cancellationToken);
             }
 
             string target;
@@ -194,6 +204,59 @@ public sealed class RoutedFileRenameService(
             samples,
             reasons);
     }
+
+    /// <summary>
+    /// Reads the capture offset off the stored copy and records it, so a name can carry the wall-clock
+    /// time the camera wrote rather than the share's zone standing in for it. Returns the media file
+    /// unchanged when the file names no offset of its own — that information simply does not exist,
+    /// and the share's zone remains the only available assumption.
+    /// </summary>
+    private async Task<MediaFile> BackfillOffsetAsync(
+        MediaFile mediaFile,
+        Share sourceShare,
+        string storedPath,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        MediaMetadata read;
+        try
+        {
+            read = await metadata.ExtractAsync(sourceShare, storedPath, mediaFile.MediaType, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return mediaFile;
+        }
+
+        // An inferred zone is the share's zone guessed on the way in, not something the file said, so
+        // recording it would dress an assumption up as evidence.
+        if (read.CapturedAt is not { } captured || read.TimeZoneInferred) return mediaFile;
+
+        var updated = WithCaptureOffset(mediaFile, (int)captured.Offset.TotalMinutes);
+        if (!dryRun) await mediaFiles.UpsertAsync(updated, cancellationToken);
+        return updated;
+    }
+
+    private static MediaFile WithCaptureOffset(MediaFile source, int offsetMinutes) => new()
+    {
+        Id = source.Id,
+        SourceShareId = source.SourceShareId,
+        SourcePath = source.SourcePath,
+        OriginalName = source.OriginalName,
+        Size = source.Size,
+        Extension = source.Extension,
+        MediaType = source.MediaType,
+        CapturedAt = source.CapturedAt,
+        TimestampSource = source.TimestampSource,
+        CapturedAtOffsetMinutes = offsetMinutes,
+        IsTimezoneInferred = source.IsTimezoneInferred,
+        Sha256 = source.Sha256,
+        CameraMake = source.CameraMake,
+        CameraModel = source.CameraModel,
+        SourceLastWriteAt = source.SourceLastWriteAt,
+        FirstSeenAt = source.FirstSeenAt,
+        LastSeenAt = source.LastSeenAt
+    };
 
     private static StringComparer PathComparer =>
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

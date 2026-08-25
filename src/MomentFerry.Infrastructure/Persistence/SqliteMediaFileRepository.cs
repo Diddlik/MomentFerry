@@ -8,7 +8,7 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
     /// <summary>Sentinel last-seen value that sorts requeued files alongside never-indexed ones.</summary>
     private static readonly string RequeuedMarker = DateTimeOffset.MinValue.UtcDateTime.ToString("O");
 
-    private const string SelectColumns = "id, source_share_id, source_path, original_name, size, extension, media_type, captured_at_utc, timestamp_source, timezone_inferred, sha256, source_last_write_at_utc, first_seen_at_utc, last_seen_at_utc, camera_make, camera_model";
+    private const string SelectColumns = "id, source_share_id, source_path, original_name, size, extension, media_type, captured_at_utc, timestamp_source, timezone_inferred, sha256, source_last_write_at_utc, first_seen_at_utc, last_seen_at_utc, camera_make, camera_model, captured_at_offset_minutes";
 
     public async Task<IReadOnlyList<MediaFile>> ListRecentAsync(int limit = 200, CancellationToken cancellationToken = default)
     {
@@ -117,11 +117,12 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
                 id, source_share_id, source_path, original_name, size, extension, media_type,
                 captured_at_utc, timestamp_source, timezone_inferred, sha256,
                 source_last_write_at_utc, first_seen_at_utc, last_seen_at_utc,
-                camera_make, camera_model)
+                camera_make, camera_model, captured_at_offset_minutes)
             VALUES (
                 $id, $sourceShareId, $sourcePath, $originalName, $size, $extension, $mediaType,
                 $capturedAt, $timestampSource, $timezoneInferred, $sha256,
-                $sourceLastWrite, $firstSeen, $lastSeen, $cameraMake, $cameraModel)
+                $sourceLastWrite, $firstSeen, $lastSeen, $cameraMake, $cameraModel,
+                $capturedAtOffset)
             ON CONFLICT(source_share_id, source_path) DO UPDATE SET
                 original_name = excluded.original_name,
                 size = excluded.size,
@@ -134,7 +135,8 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
                 source_last_write_at_utc = excluded.source_last_write_at_utc,
                 last_seen_at_utc = excluded.last_seen_at_utc,
                 camera_make = COALESCE(excluded.camera_make, media_files.camera_make),
-                camera_model = COALESCE(excluded.camera_model, media_files.camera_model);
+                camera_model = COALESCE(excluded.camera_model, media_files.camera_model),
+                captured_at_offset_minutes = excluded.captured_at_offset_minutes;
             """;
         command.Parameters.AddWithValue("$id", mediaFile.Id.ToString("D"));
         command.Parameters.AddWithValue("$sourceShareId", mediaFile.SourceShareId.ToString("D"));
@@ -154,6 +156,7 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
         command.Parameters.AddWithValue("$lastSeen", mediaFile.LastSeenAt.UtcDateTime.ToString("O"));
         command.Parameters.AddWithValue("$cameraMake", (object?)mediaFile.CameraMake ?? DBNull.Value);
         command.Parameters.AddWithValue("$cameraModel", (object?)mediaFile.CameraModel ?? DBNull.Value);
+        command.Parameters.AddWithValue("$capturedAtOffset", mediaFile.CapturedAtOffsetMinutes is null ? DBNull.Value : mediaFile.CapturedAtOffsetMinutes.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -210,6 +213,7 @@ public sealed class SqliteMediaFileRepository(SqliteConnectionFactory connection
         FirstSeenAt = DateTimeOffset.Parse(reader.GetString(12)),
         LastSeenAt = DateTimeOffset.Parse(reader.GetString(13)),
         CameraMake = reader.IsDBNull(14) ? null : reader.GetString(14),
-        CameraModel = reader.IsDBNull(15) ? null : reader.GetString(15)
+        CameraModel = reader.IsDBNull(15) ? null : reader.GetString(15),
+        CapturedAtOffsetMinutes = reader.IsDBNull(16) ? null : reader.GetInt32(16)
     };
 }

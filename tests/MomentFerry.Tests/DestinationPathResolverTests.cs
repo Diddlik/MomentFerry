@@ -140,6 +140,58 @@ public sealed class DestinationPathResolverTests
     }
 
     [Fact]
+    public void Resolve_NamesAFileWithTheWallClockTimeTheCameraRecorded()
+    {
+        // The reported case: a Samsung photo whose EXIF says 13:52:53 with OffsetTimeOriginal +02:00.
+        // CapturedAt is normalised to UTC for event matching, so naming straight from it produced
+        // 20260821_115253 - two hours before the time on the photo.
+        var (resolver, source, destination, mediaEvent) = Scenario(null, null);
+        var preset = new RenamePreset { Name = "phone", Template = "{captured:yyyyMMdd_HHmmss}_{camera}" };
+        source = CopyWithPreset(source, preset.Id);
+        var rename = new RenameContext(
+            new Dictionary<Guid, RenamePreset> { [preset.Id] = preset },
+            FileNameTemplate.BuildCameraNames([new CameraMapping { From = "Galaxy S25", To = "GalaxyS25" }]));
+
+        var media = MediaFileOf(
+            source,
+            MediaType.Image,
+            "20260821_135253.jpg",
+            "samsung",
+            "Galaxy S25",
+            capturedAt: new DateTimeOffset(2026, 8, 21, 11, 52, 53, TimeSpan.Zero),
+            capturedAtOffsetMinutes: 120);
+
+        var resolved = resolver.Resolve(mediaEvent, source, destination, media, rename);
+
+        Assert.Equal("20260821_135253_GalaxyS25.jpg", Path.GetFileName(resolved));
+    }
+
+    [Fact]
+    public void Resolve_FallsBackToTheShareZoneWhenTheFileNamedNoOffset()
+    {
+        // Nothing recorded an offset, so the share's zone stands in - the same assumption the
+        // extractor makes on the way in, which makes this the inverse of it rather than a new guess.
+        var (resolver, source, destination, mediaEvent) = Scenario(null, null);
+        source = CopyWithZone(source, "Europe/Berlin");
+        var preset = new RenamePreset { Name = "phone", Template = "{captured:yyyyMMdd_HHmmss}" };
+        source = CopyWithPreset(source, preset.Id);
+        var rename = new RenameContext(
+            new Dictionary<Guid, RenamePreset> { [preset.Id] = preset },
+            FileNameTemplate.BuildCameraNames([]));
+
+        var media = MediaFileOf(
+            source,
+            MediaType.Image,
+            "a.jpg",
+            capturedAt: new DateTimeOffset(2026, 8, 21, 11, 52, 53, TimeSpan.Zero),
+            capturedAtOffsetMinutes: null);
+
+        var resolved = resolver.Resolve(mediaEvent, source, destination, media, rename);
+
+        Assert.Equal("20260821_135253.jpg", Path.GetFileName(resolved));
+    }
+
+    [Fact]
     public void Resolve_KeepsTheOriginalNameWhenNeitherShareHasAPreset()
     {
         var (resolver, source, destination, mediaEvent) = Scenario(null, null);
@@ -190,6 +242,19 @@ public sealed class DestinationPathResolverTests
         RenamePresetId = presetId
     };
 
+    private static Share CopyWithZone(Share share, string timeZone) => new()
+    {
+        Id = share.Id,
+        Name = share.Name,
+        Path = share.Path,
+        Role = share.Role,
+        Owner = share.Owner,
+        ImageSubfolder = share.ImageSubfolder,
+        VideoSubfolder = share.VideoSubfolder,
+        RenamePresetId = share.RenamePresetId,
+        DefaultTimeZone = timeZone
+    };
+
     private static (DestinationPathResolver, Share, Share, MediaEvent) Scenario(
         string? imageSubfolder,
         string? videoSubfolder)
@@ -220,7 +285,9 @@ public sealed class DestinationPathResolverTests
         MediaType mediaType,
         string name,
         string? cameraMake = null,
-        string? cameraModel = null) => new()
+        string? cameraModel = null,
+        DateTimeOffset? capturedAt = null,
+        int? capturedAtOffsetMinutes = 0) => new()
         {
             CameraMake = cameraMake,
             CameraModel = cameraModel,
@@ -230,7 +297,9 @@ public sealed class DestinationPathResolverTests
             Size = 1,
             Extension = Path.GetExtension(name),
             MediaType = mediaType,
-            CapturedAt = new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero),
+            CapturedAt = capturedAt ?? new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero),
+            // Pinned by default, so a name never depends on the zone the test host happens to run in.
+            CapturedAtOffsetMinutes = capturedAtOffsetMinutes,
             FirstSeenAt = DateTimeOffset.UnixEpoch,
             LastSeenAt = DateTimeOffset.UnixEpoch
         };

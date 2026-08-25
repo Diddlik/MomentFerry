@@ -376,6 +376,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             Extension = ".jpg",
             MediaType = MediaType.Image,
             CapturedAt = capturedAt,
+            CapturedAtOffsetMinutes = 0,
             TimestampSource = "DateTimeOriginal",
             FirstSeenAt = capturedAt,
             LastSeenAt = capturedAt

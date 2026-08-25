@@ -153,6 +153,12 @@ public sealed class RoutingPreviewService(
                 MediaType = file.MediaType,
                 CapturedAt = capturedAt,
                 TimestampSource = timestampSource,
+                // Kept beside the normalised instant so a filename can carry the wall-clock time the
+                // camera wrote. An indexed value that predates this column has none, and the share's
+                // zone stands in when the name is rendered.
+                CapturedAtOffsetMinutes = extracted?.CapturedAt is { } fresh
+                    ? (int)fresh.Offset.TotalMinutes
+                    : existing?.CapturedAtOffsetMinutes,
                 IsTimezoneInferred = extracted is null
                     ? existing?.IsTimezoneInferred ?? true
                     : extracted.TimeZoneInferred || extracted.CapturedAt is null,

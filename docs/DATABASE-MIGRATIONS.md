@@ -60,6 +60,16 @@ Camera columns are written by the routing cycle from ExifTool output and merged 
 
 Back up `/app/data` before upgrading. Version 1.3.x and older refuse to open the version 4 database, so rollback requires restoring the pre-upgrade data backup.
 
+## Schema version 5
+
+Version 5 adds a nullable `media_files.captured_at_offset_minutes`.
+
+`captured_at_utc` stays the absolute instant: event matching and the capture-window requeue compare it as text, so a column holding mixed offsets would break both. Normalising to UTC discarded the offset the file reported, and a filename rendered from that carried a time the camera never showed — a photo taken at 13:52 with `OffsetTimeOriginal +02:00` was stored as `20260821_115253`. The offset is therefore kept beside the instant and used only when a name or a date folder is rendered.
+
+Existing rows keep NULL. A name rendered for such a row falls back to the source share's time zone, which is the same assumption the extractor already makes for a photo that names no offset. *Rename stored files* reads the offset off the stored copy and records it, so the fallback is only used where the file itself never stated one.
+
+Back up `/app/data` before upgrading. Version 1.11.7 and older refuse to open the version 5 database, so rollback requires restoring the pre-upgrade data backup.
+
 ## Adding a migration
 
 Never edit the SQL of an already released migration to change the meaning of its version. Add a new migration instead.

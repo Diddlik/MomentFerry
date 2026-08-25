@@ -1,3 +1,4 @@
+using MomentFerry.Application.Abstractions;
 using MomentFerry.Application.Services;
 using MomentFerry.Core.Domain;
 using MomentFerry.Infrastructure;
@@ -93,6 +94,41 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         Assert.Equal(1, result!.Skipped);
         Assert.Equal(0, result.Renamed);
         Assert.True(File.Exists(stored.DestinationPath!));
+    }
+
+    [Fact]
+    public async Task Rename_ReadsTheCaptureOffsetOffTheStoredCopyWhenTheIndexHasNone()
+    {
+        // A row indexed before the offset was persisted: its source is long gone, so the only place
+        // left to read the offset is the stored copy itself. The share's zone is UTC here, so a name
+        // in +02:00 can only have come from the file: 17:47:44Z was written as 19:47:44.
+        var fixture = await CreateAsync(storedFileOffsetMinutes: 120);
+        await fixture.CameraMappings.UpsertAsync(new CameraMapping { From = "OnePlus 12", To = "OnePlus12" });
+        var stored = await StoreAsync(fixture, "20260814_174744_OnePlus12.jpg", offsetMinutes: null);
+
+        var result = await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: false);
+
+        Assert.Equal(1, result!.Renamed);
+        var renamed = Path.Combine(Path.GetDirectoryName(stored.DestinationPath!)!, "20260814_194744_OnePlus12.jpg");
+        Assert.True(File.Exists(renamed));
+
+        // Persisted, so the next run neither re-reads it nor falls back to the share's zone.
+        var persisted = await fixture.MediaFiles.GetAsync(fixture.Media.Id);
+        Assert.Equal(120, persisted!.CapturedAtOffsetMinutes);
+    }
+
+    [Fact]
+    public async Task Rename_DoesNotRecordAnOffsetTheStoredFileNeverStated()
+    {
+        // The extractor can only infer the share's zone here. Recording that would dress an
+        // assumption up as evidence, so the row keeps its null and the fallback stays a fallback.
+        var fixture = await CreateAsync(storedFileOffsetMinutes: null);
+        await StoreAsync(fixture, "20260814_174744.jpg", offsetMinutes: null);
+
+        await fixture.Service.RenameAsync(fixture.Event.Id, dryRun: false);
+
+        var persisted = await fixture.MediaFiles.GetAsync(fixture.Media.Id);
+        Assert.Null(persisted!.CapturedAtOffsetMinutes);
     }
 
     [Fact]
@@ -239,6 +275,7 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             Extension = ".jpg",
             MediaType = MediaType.Image,
             CapturedAt = fixture.Media.CapturedAt!.Value.AddSeconds(1),
+            CapturedAtOffsetMinutes = 0,
             TimestampSource = fixture.Media.TimestampSource,
             CameraMake = fixture.Media.CameraMake,
             CameraModel = fixture.Media.CameraModel,
@@ -253,7 +290,8 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         Fixture fixture,
         string storedName,
         bool withHash = true,
-        MediaFile? media = null)
+        MediaFile? media = null,
+        int? offsetMinutes = 0)
     {
         var destinationFolder = Path.Combine(fixture.DestinationRoot, "Kroatien 2026");
         Directory.CreateDirectory(destinationFolder);
@@ -261,6 +299,10 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         await File.WriteAllTextAsync(destinationPath, StoredContent);
         var hash = withHash ? await HashOfAsync(destinationPath) : null;
         var subject = media ?? fixture.Media;
+        if (offsetMinutes != subject.CapturedAtOffsetMinutes)
+        {
+            await fixture.MediaFiles.UpsertAsync(CopyWithOffset(subject, offsetMinutes));
+        }
 
         var operation = new MediaOperation
         {
@@ -278,13 +320,31 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         return operation;
     }
 
+    private static MediaFile CopyWithOffset(MediaFile source, int? offsetMinutes) => new()
+    {
+        Id = source.Id,
+        SourceShareId = source.SourceShareId,
+        SourcePath = source.SourcePath,
+        OriginalName = source.OriginalName,
+        Size = source.Size,
+        Extension = source.Extension,
+        MediaType = source.MediaType,
+        CapturedAt = source.CapturedAt,
+        TimestampSource = source.TimestampSource,
+        CapturedAtOffsetMinutes = offsetMinutes,
+        CameraMake = source.CameraMake,
+        CameraModel = source.CameraModel,
+        FirstSeenAt = source.FirstSeenAt,
+        LastSeenAt = source.LastSeenAt
+    };
+
     private static async Task<string> HashOfAsync(string path)
     {
         await using var stream = File.OpenRead(path);
         return await new Sha256HashService().ComputeSha256Async(stream);
     }
 
-    private async Task<Fixture> CreateAsync()
+    private async Task<Fixture> CreateAsync(int? storedFileOffsetMinutes = null)
     {
         await new SqliteDatabaseInitializer(_factory).InitializeAsync();
         var shares = new SqliteShareRepository(_factory);
@@ -308,7 +368,10 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             Name = "Pavel",
             Path = sourceRoot,
             Role = ShareRole.Source,
-            RenamePresetId = preset.Id
+            RenamePresetId = preset.Id,
+            // UTC, so a name that comes out in +02:00 can only have come from the stored file's own
+            // offset and not from the share's zone standing in for it.
+            DefaultTimeZone = "UTC"
         };
         var destinationShare = new Share
         {
@@ -346,6 +409,7 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             Extension = ".jpg",
             MediaType = MediaType.Image,
             CapturedAt = capturedAt,
+            CapturedAtOffsetMinutes = 0,
             TimestampSource = "DateTimeOriginal",
             CameraMake = "OnePlus",
             CameraModel = "OnePlus 12",
@@ -361,7 +425,8 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             shares,
             new RenameContextFactory(presets, cameraMappings),
             new LocalFileSystemGateway(),
-            new Sha256HashService());
+            new Sha256HashService(),
+            new StubExtractor(storedFileOffsetMinutes));
 
         return new Fixture(
             service,
@@ -385,4 +450,35 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
         MediaEvent Event,
         MediaFile Media,
         string DestinationRoot);
+
+    /// <summary>
+    /// Stands in for ExifTool reading the stored copy. Null means the file names no offset of its own,
+    /// which is what an older camera or a stripped file looks like.
+    /// </summary>
+    private sealed class StubExtractor(int? offsetMinutes) : IMediaMetadataExtractor
+    {
+        public int Calls { get; private set; }
+
+        public Task<MediaMetadata> ExtractAsync(
+            Share share,
+            string path,
+            MediaType mediaType,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            var captured = offsetMinutes is { } minutes
+                ? new DateTimeOffset(2026, 8, 14, 19, 47, 44, TimeSpan.FromMinutes(minutes))
+                : (DateTimeOffset?)null;
+            return Task.FromResult(new MediaMetadata(
+                captured,
+                captured is null ? null : "DateTimeOriginal",
+                captured is null,
+                "OnePlus",
+                "OnePlus 12",
+                null,
+                null,
+                null,
+                "image/jpeg"));
+        }
+    }
 }

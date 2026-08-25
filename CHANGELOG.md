@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.8] - 2026-08-25
+
+### Fixed
+
+- filenames carried the capture time in UTC instead of the time the camera wrote. A Samsung photo whose EXIF says 13:52:53 with an offset of +02:00 was stored as `20260821_115253`, two hours early, and every `{day}` folder had the same shift, so anything shot between midnight and 02:00 filed under the previous day. Measured across 1674 photos in one library: every single one was off by exactly its zone offset, 1h in winter and 2h in summer. The capture time itself was never wrong — it is deliberately normalised to UTC so events and range queries compare one instant — but the offset the file reported was thrown away on the way into the database, and the name was rendered from the normalised value. The offset is now stored beside the instant (schema 5) and used whenever a name or a date folder is rendered. *Rename stored files* reads it off the stored copy for media indexed before this version, whose sources Safe Move has usually already released, and Routing preview stops promising a name that differs from the one that lands.
+
 ## [1.11.7] - 2026-08-25
 
 ### Added
