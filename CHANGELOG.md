@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.2] - 2026-08-25
+
+### Fixed
+
+- automatic image updates never ran on a container that restarts regularly. The check sat on a bare six-hour timer whose first tick came six hours after start, so a restart reset it every time and turning the toggle on did nothing visible until that timer happened to fire. It now checks shortly after start and every six hours after that, and every pass says in the Activity log what it found: nothing to install, an available version with no updater companion configured, the install it requested, or the error — a release that silently never arrives was indistinguishable from a broken toggle.
+
 ## [1.11.1] - 2026-08-25
 
 ### Fixed

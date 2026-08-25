@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Web.Updates;
 using MomentFerry.Web.Api;
@@ -119,6 +121,62 @@ public sealed class ImageUpdateServiceTests
         Assert.False(status.UpdateAvailable);
         Assert.Equal(new DateTimeOffset(2026, 8, 21, 20, 0, 0, TimeSpan.Zero), status.LastUpdateCompletedAt);
         Assert.Null(status.LastError);
+    }
+
+    [Fact]
+    public async Task AutomaticUpdates_CheckAndInstallWithoutWaitingForTheFirstPeriod()
+    {
+        // The worker used to wait one full six-hour period before its first check, so a container that
+        // restarts more often never updated itself and enabling the toggle looked broken.
+        var handler = new QueueHandler(
+            JsonResponse("""{"tag_name":"v1.2.0","body":"Fixes","published_at":"2026-08-21T18:00:00Z"}"""),
+            JsonResponse("""{"tag_name":"v1.2.0","body":"Fixes","published_at":"2026-08-21T18:00:00Z"}"""),
+            new HttpResponseMessage(HttpStatusCode.OK));
+        var settings = new MemorySettingsStore();
+        await settings.UpdateAsync(new MomentFerryRuntimeSettings { AutomaticImageUpdatesEnabled = true });
+        var worker = CreateWorker(CreateService(handler), settings);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitForRequestsAsync(handler, 3);
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(
+            "http://updater:8080/v1/update",
+            handler.Requests[^1].Uri);
+        Assert.Equal("Bearer secret-token", handler.Requests[^1].Authorization);
+    }
+
+    [Fact]
+    public async Task AutomaticUpdates_DisabledToggleNeverContactsTheReleaseService()
+    {
+        var handler = new QueueHandler();
+        var worker = CreateWorker(CreateService(handler), new MemorySettingsStore());
+
+        await worker.CheckAndInstallAsync(CancellationToken.None);
+
+        Assert.Empty(handler.Requests);
+    }
+
+    private static ImageUpdateWorker CreateWorker(ImageUpdateService service, IRuntimeSettingsStore settings) => new(
+        service,
+        settings,
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["MomentFerry:Updates:InitialDelaySeconds"] = "0" })
+            .Build(),
+        NullLogger<ImageUpdateWorker>.Instance);
+
+    private static async Task WaitForRequestsAsync(QueueHandler handler, int count)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (handler.Requests.Count < count && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.Equal(count, handler.Requests.Count);
     }
 
     private static ImageUpdateService CreateService(
