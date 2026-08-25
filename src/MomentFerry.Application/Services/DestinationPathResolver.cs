@@ -58,7 +58,7 @@ public sealed class DestinationPathResolver(IFileSystemGateway? fileSystem = nul
     /// 20260821_115253. The offset the file reported is used when it exists, and otherwise the share's
     /// zone stands in — the same assumption the extractor already makes for a photo without one.
     /// </summary>
-    private static DateTimeOffset LocalCapture(MediaFile mediaFile, Share sourceShare)
+    public static DateTimeOffset LocalCapture(MediaFile mediaFile, Share sourceShare)
     {
         var captured = mediaFile.CapturedAt ?? DateTimeOffset.UtcNow;
         if (mediaFile.CapturedAtOffsetMinutes is { } minutes)

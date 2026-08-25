@@ -51,6 +51,45 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task PhotoWithAZoneThatCannotBeResolved_FallsBackToUtcInsteadOfThrowing()
+    {
+        // Without tzdata even a correct id like Europe/Berlin throws, and a routing cycle that dies on
+        // the first photo is worse than a capture time read as UTC and reported as inferred.
+        var share = new Share
+        {
+            Id = Guid.NewGuid(),
+            Name = "Phone",
+            Path = "/sources/phone",
+            Role = ShareRole.Source,
+            DefaultTimeZone = "Mars/Olympus_Mons"
+        };
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.jpg","DateTimeOriginal":"2026:08:21 13:52:53"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(share, "x.jpg", MediaType.Image);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 21, 13, 52, 53, TimeSpan.Zero), metadata.CapturedAt);
+        Assert.True(metadata.TimeZoneInferred);
+    }
+
+    [Fact]
+    public async Task PhotoWithAnExplicitOffset_KeepsTheOffsetTheCameraWrote()
+    {
+        // The reported case. The offset is what lets the filename carry 13:52:53 rather than the
+        // 11:52:53 the normalised instant would render.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.jpg","DateTimeOriginal":"2026:08:21 13:52:53","OffsetTimeOriginal":"+02:00"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.jpg", MediaType.Image);
+
+        Assert.Equal(TimeSpan.FromHours(2), metadata.CapturedAt!.Value.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 8, 21, 13, 52, 53, TimeSpan.FromHours(2)), metadata.CapturedAt);
+        Assert.False(metadata.TimeZoneInferred);
+    }
+
+    [Fact]
     public async Task CreationDateWins_BecauseItCarriesTheRecordingOffset()
     {
         // A OnePlus recording: MediaCreateDate is UTC, CreationDate is the same moment in the zone it

@@ -6,6 +6,14 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.11] - 2026-08-25
+
+### Fixed
+
+- `TZ` was silently ignored, so every photo whose EXIF states no offset was read as if it had been taken in UTC. The runtime image never installed `tzdata`, and without it .NET cannot resolve a named zone: `TZ=Europe/Berlin` left `TimeZoneInfo.Local` as UTC, and a share's configured zone could not be resolved either. The image now ships `tzdata`. Capture times already indexed keep the assumption they were read with — *Read metadata again* corrects the ones whose source file still exists.
+- a share time zone that cannot be resolved no longer takes the extraction down with it. `FindSystemTimeZoneById` was called unguarded, so on an image without `tzdata` a correctly spelled `Europe/Berlin` in a share would have thrown on the first photo of every routing cycle. It now falls back to UTC and reports the capture time as inferred.
+- the filename preview rendered the capture time from the normalised instant while routing rendered it in the capture zone, so the preview promised a name one zone offset away from the one that landed.
+
 ## [1.11.10] - 2026-08-25
 
 ### Fixed

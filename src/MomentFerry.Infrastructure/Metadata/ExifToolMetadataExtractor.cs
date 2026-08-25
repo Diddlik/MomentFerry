@@ -175,12 +175,22 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
             }
 
             // A photo timestamp really is local wall-clock time with nothing to anchor it, so the
-            // share's zone is a genuine assumption and is reported as one.
+            // share's zone is a genuine assumption and is reported as one. An unresolvable zone must
+            // not take the extraction down with it: without tzdata even a correct id throws, and a
+            // routing cycle that dies on the first photo is worse than a capture time read as UTC.
             var zoneId = string.IsNullOrWhiteSpace(share.DefaultTimeZone)
                 ? TimeZoneInfo.Local.Id
                 : share.DefaultTimeZone;
-            var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
-            var offset = zone.GetUtcOffset(local);
+            TimeSpan offset;
+            try
+            {
+                offset = TimeZoneInfo.FindSystemTimeZoneById(zoneId).GetUtcOffset(local);
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                offset = TimeSpan.Zero;
+            }
+
             return (new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), offset), field, true);
         }
 

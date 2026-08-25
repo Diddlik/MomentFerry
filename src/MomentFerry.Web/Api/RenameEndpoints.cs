@@ -63,7 +63,11 @@ public static class RenameEndpoints
                     request,
                     Path.GetFileNameWithoutExtension(sample.OriginalName),
                     Path.GetExtension(sample.OriginalName),
-                    sample.CapturedAt ?? DateTimeOffset.UtcNow,
+                    // Same rule the routing decision applies, or the preview promises a name that is
+                    // one zone offset away from the one that lands.
+                    share is null
+                        ? sample.CapturedAt ?? DateTimeOffset.UtcNow
+                        : DestinationPathResolver.LocalCapture(sample, share),
                     sample.CameraMake,
                     sample.CameraModel,
                     share?.Name ?? "Source",
