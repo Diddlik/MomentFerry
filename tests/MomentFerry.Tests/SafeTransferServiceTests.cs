@@ -234,6 +234,28 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Coordinator_WhenTheCommittedDestinationIsGone_RoutesTheReturnedSourceWithoutRouteAgain()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+
+        // The destination copy is removed outside MomentFerry and the source is back in the share.
+        // The terminal record now describes a file that no longer exists, so it must not keep the
+        // source unroutable: nothing is at the other end to protect.
+        File.Delete(first.Operation.DestinationPath!);
+        await File.WriteAllBytesAsync(fixture.Media.SourcePath, fixture.SourceBytes);
+
+        var again = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
+
+        Assert.True(again.Executed);
+        Assert.False(again.AlreadyRouted);
+        Assert.Equal(MediaOperationState.Completed, again.Result!.Operation.State);
+        Assert.True(File.Exists(again.Result.Operation.DestinationPath!));
+        Assert.False(File.Exists(fixture.Media.SourcePath));
+    }
+
+    [Fact]
     public async Task SupersedeTerminalByEvent_UnblocksTheWholeEventAndLeavesHeldOperationsAlone()
     {
         var fixture = await CreateFixtureAsync();
@@ -388,7 +410,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
                 new SqliteRenamePresetRepository(connectionFactory),
                 new SqliteCameraMappingRepository(connectionFactory)),
             new FixedClock(capturedAt.AddHours(1)));
-        var coordinator = new TransferCoordinator(operations, service);
+        var coordinator = new TransferCoordinator(operations, fileSystem, service);
 
         var retry = new OperationRetryService(operations, events, shares, fileSystem, service, new FixedClock(capturedAt.AddHours(2)));
 
@@ -485,8 +507,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.FindByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
         public Task<int> SupersedeTerminalByEventAsync(Guid eventId, string reason, DateTimeOffset supersededAt, CancellationToken cancellationToken = default) =>
             inner.SupersedeTerminalByEventAsync(eventId, reason, supersededAt, cancellationToken);
-        public Task<bool> HasTerminalOperationAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
-            inner.HasTerminalOperationAsync(mediaFileId, eventId, cancellationToken);
+        public Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
+            inner.ListTerminalAsync(mediaFileId, eventId, cancellationToken);
 
         public Task<int> DeleteFinishedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken = default) =>
             inner.DeleteFinishedBeforeAsync(cutoff, cancellationToken);

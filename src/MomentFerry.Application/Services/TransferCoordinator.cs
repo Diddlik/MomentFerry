@@ -5,6 +5,7 @@ namespace MomentFerry.Application.Services;
 
 public sealed class TransferCoordinator(
     IMediaOperationRepository operations,
+    IFileSystemGateway fileSystem,
     SafeTransferService transfer)
 {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _mediaLocks = new();
@@ -18,7 +19,11 @@ public sealed class TransferCoordinator(
         await gate.WaitAsync(cancellationToken);
         try
         {
-            if (await operations.HasTerminalOperationAsync(mediaFileId, eventId, cancellationToken))
+            // A finished operation only blocks a re-route while the file it committed is still at the
+            // destination. Trusting the record alone left media unroutable for good once its
+            // destination was deleted afterwards: the source sat in the share, matched its event every
+            // cycle, and was refused as "already routed" with nothing at the other end.
+            if (await HasLiveDestinationAsync(mediaFileId, eventId, cancellationToken))
             {
                 return new CoordinatedTransferResult(
                     false,
@@ -47,6 +52,28 @@ public sealed class TransferCoordinator(
                 _mediaLocks.TryRemove(new KeyValuePair<Guid, SemaphoreSlim>(mediaFileId, gate));
             }
         }
+    }
+
+    /// <summary>
+    /// True when a finished operation of this media file/event pair still has its committed file at the
+    /// destination. Existence is checked, not content: re-hashing every routed file on every cycle
+    /// would read the whole library, and the transfer itself verifies bytes before it removes a source.
+    /// </summary>
+    private async Task<bool> HasLiveDestinationAsync(
+        Guid mediaFileId,
+        Guid eventId,
+        CancellationToken cancellationToken)
+    {
+        foreach (var terminal in await operations.ListTerminalAsync(mediaFileId, eventId, cancellationToken))
+        {
+            if (!string.IsNullOrWhiteSpace(terminal.DestinationPath) &&
+                fileSystem.FileExists(terminal.DestinationPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

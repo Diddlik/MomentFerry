@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.5] - 2026-08-25
+
+### Fixed
+
+- a file whose destination copy no longer existed was never routed again. A finished operation blocked any further attempt on that file and event on the strength of the database row alone, so once the file it recorded was gone from the destination, the source sat in the share, matched its event on every cycle, and was counted as *already routed* with nothing at the other end — a state no *Needs your decision* card and no counter showed, only the Activity log. On the installation this was found on, 437 files were held that way and the Overview reported every file routed cleanly. A finished operation now blocks a re-route only while the file it committed is still at the destination, which is the same rule the duplicate check already followed: the record says where to look, the file on disk decides. Only existence is checked, never content, because re-hashing every routed file on every cycle would read the whole library — and a transfer still verifies bytes before it removes any source. *Route again* on the event remains the way to re-route media whose destination is present.
+
 ## [1.11.4] - 2026-08-25
 
 ### Fixed

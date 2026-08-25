@@ -22,8 +22,16 @@ public interface IMediaOperationRepository
         Guid excludedMediaFileId,
         CancellationToken cancellationToken = default);
 
-    Task<bool> HasTerminalOperationAsync(
-Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The finished operations of one media file/event pair, newest first. The caller must still check
+    /// the destination each one recorded: a terminal record alone does not prove the file is still
+    /// there, and a destination that was deleted after the fact must not keep its source unroutable.
+    /// </summary>
+    Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(
+        Guid mediaFileId,
+        Guid eventId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Marks every finished operation of one event as superseded and reports how many were affected.
     /// This is what lifts the terminal-state block for a whole event, so its media can be routed again

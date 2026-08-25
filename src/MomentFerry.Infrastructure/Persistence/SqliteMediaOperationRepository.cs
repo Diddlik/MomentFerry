@@ -124,23 +124,32 @@ public sealed class SqliteMediaOperationRepository(SqliteConnectionFactory conne
         return await reader.ReadAsync(cancellationToken) ? Read(reader) : null;
     }
 
-    public async Task<bool> HasTerminalOperationAsync(
-Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(
+        Guid mediaFileId,
+        Guid eventId,
+        CancellationToken cancellationToken = default)
     {
+        var results = new List<MediaOperation>();
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT 1 FROM operations
+        command.CommandText = $"""
+            SELECT {SelectColumns} FROM operations
             WHERE media_file_id = $mediaFileId
               AND event_id = $eventId
               AND state IN ($completed, $ignored)
-            LIMIT 1;
+            ORDER BY updated_at_utc DESC;
             """;
         command.Parameters.AddWithValue("$mediaFileId", mediaFileId.ToString("D"));
         command.Parameters.AddWithValue("$eventId", eventId.ToString("D"));
         command.Parameters.AddWithValue("$completed", (int)MediaOperationState.Completed);
         command.Parameters.AddWithValue("$ignored", (int)MediaOperationState.Ignored);
-        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(Read(reader));
+        }
+
+        return results;
     }
 
     public async Task<int> SupersedeTerminalByEventAsync(
