@@ -23,16 +23,6 @@ public interface IMediaOperationRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The finished operations of one media file/event pair, newest first. The caller must still check
-    /// the destination each one recorded: a terminal record alone does not prove the file is still
-    /// there, and a destination that was deleted after the fact must not keep its source unroutable.
-    /// </summary>
-    Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(
-        Guid mediaFileId,
-        Guid eventId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// The completed operations of one event, newest first. Superseded and held operations are left
     /// out: only a completed one owns the file it points at.
     /// </summary>

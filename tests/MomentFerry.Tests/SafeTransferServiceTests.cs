@@ -215,11 +215,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
         Assert.False(File.Exists(fixture.Media.SourcePath));
 
         // The user puts the file back and asks for it to be routed again, for example after changing
-        // the naming rules. The coordinator would otherwise refuse: the pair already reached a
-        // terminal state.
+        // the naming rules.
         await File.WriteAllBytesAsync(fixture.Media.SourcePath, fixture.SourceBytes);
-        var blocked = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
-        Assert.False(blocked.Executed);
 
         var again = await fixture.Retry.RouteAgainAsync(first.Operation.Id);
 
@@ -249,9 +246,34 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
         var again = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
 
         Assert.True(again.Executed);
-        Assert.False(again.AlreadyRouted);
         Assert.Equal(MediaOperationState.Completed, again.Result!.Operation.State);
         Assert.True(File.Exists(again.Result.Operation.DestinationPath!));
+        Assert.False(File.Exists(fixture.Media.SourcePath));
+    }
+
+    [Fact]
+    public async Task Coordinator_WhenAnotherFileTookTheRecordedDestinationName_RoutesTheReturnedSourceBesideIt()
+    {
+        var fixture = await CreateFixtureAsync();
+        var first = await fixture.Service.ExecuteAsync(fixture.Media.Id, fixture.Event.Id);
+        Assert.Equal(MediaOperationState.Completed, first.Operation.State);
+
+        // Another photo comes to sit under the name this operation committed, and the source is back
+        // in the share. The recorded path exists but no longer holds these bytes, so the file still
+        // has to move - beside the one that took its name, not instead of it. Same length on purpose:
+        // only the content decides.
+        var taken = first.Operation.DestinationPath!;
+        var otherBytes = fixture.SourceBytes.Select(b => (byte)(b ^ 0xFF)).ToArray();
+        await File.WriteAllBytesAsync(taken, otherBytes);
+        await File.WriteAllBytesAsync(fixture.Media.SourcePath, fixture.SourceBytes);
+
+        var again = await fixture.Coordinator.ExecuteOnceAsync(fixture.Media.Id, fixture.Event.Id);
+
+        Assert.True(again.Executed);
+        Assert.Equal(MediaOperationState.Completed, again.Result!.Operation.State);
+        Assert.False(PathEquals(again.Result.Operation.DestinationPath!, taken));
+        Assert.Equal(otherBytes, await File.ReadAllBytesAsync(taken));
+        Assert.Equal(fixture.SourceBytes, await File.ReadAllBytesAsync(again.Result.Operation.DestinationPath!));
         Assert.False(File.Exists(fixture.Media.SourcePath));
     }
 
@@ -411,7 +433,7 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
                 new SqliteRenamePresetRepository(connectionFactory),
                 new SqliteCameraMappingRepository(connectionFactory)),
             new FixedClock(capturedAt.AddHours(1)));
-        var coordinator = new TransferCoordinator(operations, fileSystem, service);
+        var coordinator = new TransferCoordinator(operations, service);
 
         var retry = new OperationRetryService(operations, events, shares, fileSystem, service, new FixedClock(capturedAt.AddHours(2)));
 
@@ -508,8 +530,6 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             inner.FindByDestinationHashAsync(destinationHash, excludedMediaFileId, cancellationToken);
         public Task<int> SupersedeTerminalByEventAsync(Guid eventId, string reason, DateTimeOffset supersededAt, CancellationToken cancellationToken = default) =>
             inner.SupersedeTerminalByEventAsync(eventId, reason, supersededAt, cancellationToken);
-        public Task<IReadOnlyList<MediaOperation>> ListTerminalAsync(Guid mediaFileId, Guid eventId, CancellationToken cancellationToken = default) =>
-            inner.ListTerminalAsync(mediaFileId, eventId, cancellationToken);
         public Task<IReadOnlyList<MediaOperation>> ListCompletedByEventAsync(Guid eventId, CancellationToken cancellationToken = default) =>
             inner.ListCompletedByEventAsync(eventId, cancellationToken);
 

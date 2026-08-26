@@ -5,7 +5,6 @@ namespace MomentFerry.Application.Services;
 
 public sealed class TransferCoordinator(
     IMediaOperationRepository operations,
-    IFileSystemGateway fileSystem,
     SafeTransferService transfer)
 {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _mediaLocks = new();
@@ -19,19 +18,12 @@ public sealed class TransferCoordinator(
         await gate.WaitAsync(cancellationToken);
         try
         {
-            // A finished operation only blocks a re-route while the file it committed is still at the
-            // destination. Trusting the record alone left media unroutable for good once its
-            // destination was deleted afterwards: the source sat in the share, matched its event every
-            // cycle, and was refused as "already routed" with nothing at the other end.
-            if (await HasLiveDestinationAsync(mediaFileId, eventId, cancellationToken))
-            {
-                return new CoordinatedTransferResult(
-                    false,
-                    null,
-                    "This media file/event combination has already reached a terminal operation state.",
-                    AlreadyRouted: true);
-            }
-
+            // A finished operation does not block a re-route. Whether the file still needs to move is
+            // a question about bytes, and only the transfer can answer it: it finds the content by
+            // hash wherever it was stored and lets the event's DuplicateStrategy decide, and it gives
+            // differing content a name of its own through the ConflictStrategy. A guard that asked
+            // instead whether some file occupies the recorded destination path answered a different
+            // question, and stranded a source for good once anything else came to sit under that name.
             var incomplete = await operations.GetIncompleteByMediaFileAsync(mediaFileId, cancellationToken);
             if (incomplete is not null)
             {
@@ -41,8 +33,18 @@ public sealed class TransferCoordinator(
                     "This media file already has an incomplete operation. Recovery must resolve it first.");
             }
 
-            var result = await transfer.ExecuteAsync(mediaFileId, eventId, cancellationToken);
-            return new CoordinatedTransferResult(true, result, result.Message);
+            try
+            {
+                var result = await transfer.ExecuteAsync(mediaFileId, eventId, cancellationToken);
+                return new CoordinatedTransferResult(true, result, result.Message);
+            }
+            catch (FileNotFoundException ex)
+            {
+                // Nothing left to move: an earlier pass already released this source. With no
+                // terminal-state guard in front, this is the ordinary way a second attempt on the
+                // same file ends, so it is a refusal and not a transfer error.
+                return new CoordinatedTransferResult(false, null, ex.Message);
+            }
         }
         finally
         {
@@ -53,34 +55,9 @@ public sealed class TransferCoordinator(
             }
         }
     }
-
-    /// <summary>
-    /// True when a finished operation of this media file/event pair still has its committed file at the
-    /// destination. Existence is checked, not content: re-hashing every routed file on every cycle
-    /// would read the whole library, and the transfer itself verifies bytes before it removes a source.
-    /// </summary>
-    private async Task<bool> HasLiveDestinationAsync(
-        Guid mediaFileId,
-        Guid eventId,
-        CancellationToken cancellationToken)
-    {
-        foreach (var terminal in await operations.ListTerminalAsync(mediaFileId, eventId, cancellationToken))
-        {
-            if (!string.IsNullOrWhiteSpace(terminal.DestinationPath) &&
-                fileSystem.FileExists(terminal.DestinationPath))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
 
 public sealed record CoordinatedTransferResult(
     bool Executed,
     TransferExecutionResult? Result,
-    string? Message,
-    // Set apart from the other refusals because a full share carries thousands of them every cycle:
-    // the routing worker counts these instead of logging one line each.
-    bool AlreadyRouted = false);
+    string? Message);
