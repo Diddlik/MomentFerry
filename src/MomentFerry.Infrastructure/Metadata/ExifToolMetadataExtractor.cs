@@ -42,6 +42,7 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
                 "-Model",
                 "-AndroidManufacturer",
                 "-AndroidModel",
+                "-OplusProductModel",
                 "-SamsungModel",
                 "-Author",
                 "-ImageWidth",
@@ -105,7 +106,9 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
 
     /// <summary>
     /// Phone recordings usually carry no Make/Model at all. Android writes com.android.model into the
-    /// QuickTime keys, which ExifTool reports as AndroidModel. Samsung instead writes its model code
+    /// QuickTime keys, which ExifTool reports as AndroidModel. OnePlus writes neither, and puts the
+    /// marketing name into its own key com.oplus.product.model ("OnePlus 12"), reported as
+    /// OplusProductModel. Samsung instead writes its model code
     /// into a maker note (SamsungModel, "SM-S921B") and the marketing device name into the user-data
     /// author field (QuickTime:Author, "Galaxy S24"). Author is only trusted once SamsungModel proves
     /// who wrote the file, because everywhere else it is free text that could name a person.
@@ -113,7 +116,9 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
     /// </summary>
     private static string? ResolveModel(JsonElement root)
     {
-        var model = GetString(root, "Model") ?? GetString(root, "AndroidModel");
+        var model = GetString(root, "Model")
+            ?? GetString(root, "AndroidModel")
+            ?? GetString(root, "OplusProductModel");
         if (!string.IsNullOrWhiteSpace(model)) return model;
 
         var samsungModel = GetString(root, "SamsungModel");

@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.14] - 2026-08-26
+
+### Fixed
+
+- OnePlus videos were stored without a camera, so the `{camera}` token collapsed out of their names while photos from the same phone kept it. A OnePlus recording carries no `Make`, no `Model` and not even the `com.android.model` key every other Android phone writes; it puts the device name into `com.oplus.product.model` instead, which ExifTool reports as `OplusProductModel` and which already holds the marketing name (`OnePlus 12`), so no camera mapping is needed for it. The extractor now asks for that key and prefers it after `Model` and `AndroidModel`. Files already indexed keep the empty camera until *Read metadata again* re-reads them, and copies already stored are renamed by *Rename routed files* on the event.
+
 ## [1.11.13] - 2026-08-25
 
 ### Changed

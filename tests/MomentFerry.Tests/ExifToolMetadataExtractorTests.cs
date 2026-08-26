@@ -250,6 +250,20 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task OnePlusVideo_UsesTheOplusProductKey()
+    {
+        // A OnePlus 12 recording writes no Make, no Model and no com.android.model - only
+        // com.oplus.product.model, which already carries the marketing name.
+        var extractor = StubReturning("""
+            [{"SourceFile":"x.mp4","OplusProductModel":"OnePlus 12","MediaCreateDate":"2026:08:09 18:50:05"}]
+            """);
+
+        var metadata = await extractor.ExtractAsync(_share, "x.mp4", MediaType.Video);
+
+        Assert.Equal("OnePlus 12", metadata.CameraModel);
+    }
+
+    [Fact]
     public async Task AuthorAlone_IsNotTreatedAsACamera()
     {
         // Without the Samsung model the author field is free text and could be a person's name.
