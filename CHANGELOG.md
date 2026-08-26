@@ -6,6 +6,8 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [1.11.15] - 2026-08-26
+
 ### Changed
 
 - a file that matches an event is routed whenever its content is not already at the destination. The terminal-state guard is gone: it refused a re-route while *some* file occupied the `DestinationPath` a finished operation had recorded, without ever asking whether that file was still the one it had written. Move a routed copy back into a source share and route it again, and another photo can come to sit under that name; from then on the original was counted as "already routed" on every cycle while its bytes were nowhere at the destination, and only *Route again* could free it. The decision now rests where the bytes are known: `SafeTransferService` looks the content up by hash, re-hashes the file it finds on disk, and lets the event's `DuplicateStrategy` remove a source whose copy is genuinely stored, while differing content gets its own name through the `ConflictStrategy`. The price is a full SHA-256 read of every source that lingers in a share on each cycle — under Safe Move the sources are released, so this is felt only in `Copy` mode.
