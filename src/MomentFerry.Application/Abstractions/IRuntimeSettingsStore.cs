@@ -11,7 +11,8 @@ public sealed record MomentFerryRuntimeSettings(
     bool AutomaticImageUpdatesEnabled = false,
     // 0 keeps the operation history for good. Anything still waiting for a decision is never removed,
     // however old it is, so a retention window cannot bury an unresolved file.
-    int OperationRetentionDays = 0);
+    int OperationRetentionDays = 0,
+    bool PasswordProtectionEnabled = false);
 
 public interface IRuntimeSettingsStore
 {

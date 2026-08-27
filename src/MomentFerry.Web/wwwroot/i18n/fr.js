@@ -510,5 +510,21 @@ window.MF_MESSAGES = {
   "{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors": "{{sources}} sources · {{matched}} associés · {{wouldMove}} seraient déplacés · {{executed}} exécutés · {{skipped}} ignorés · {{errors}} erreurs",
   "{{total}} media files · {{stable}} stable · {{waiting}} waiting": "{{total}} fichiers médias · {{stable}} stables · {{waiting}} en attente",
   "{{version}} available →": "{{version}} disponible →",
-  "{{version}} is available": "{{version}} est disponible"
+  "{{version}} is available": "{{version}} est disponible",
+  "Access protection": "Protection d’accès",
+  "Access protection is not configured.": "La protection d’accès n’est pas configurée.",
+  "Checking configured credentials…": "Vérification des identifiants configurés…",
+  "Credentials configured through environment variables.": "Identifiants configurés via des variables d’environnement.",
+  "Enter the credentials configured for this MomentFerry instance.": "Saisissez les identifiants configurés pour cette instance MomentFerry.",
+  "Invalid username or password.": "Nom d’utilisateur ou mot de passe incorrect.",
+  "Password": "Mot de passe",
+  "Protected console": "Console protégée",
+  "Protect the Web UI and API when MomentFerry is reachable outside your trusted network.": "Protégez l’interface Web et l’API lorsque MomentFerry est accessible hors de votre réseau de confiance.",
+  "Require a username and password": "Exiger un nom d’utilisateur et un mot de passe",
+  "Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.": "Définissez d’abord MOMENTFERRY_USERNAME et MOMENTFERRY_PASSWORD dans votre fichier .env.",
+  "Sign in": "Se connecter",
+  "Sign out": "Se déconnecter",
+  "Signing in…": "Connexion…",
+  "Too many sign-in attempts. Try again in a minute.": "Trop de tentatives de connexion. Réessayez dans une minute.",
+  "Username": "Nom d’utilisateur"
 };

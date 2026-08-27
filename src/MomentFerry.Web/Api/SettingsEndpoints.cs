@@ -2,6 +2,7 @@ using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 using MomentFerry.Infrastructure;
 using MomentFerry.Web.Background;
+using MomentFerry.Web.Security;
 using MomentFerry.Web.Updates;
 using System.Globalization;
 using System.Text;
@@ -22,6 +23,7 @@ public static class SettingsEndpoints
         app.MapPut("/api/v1/settings", async (
             RuntimeSettingsRequest request,
             IRuntimeSettingsStore store,
+            PasswordProtectionOptions passwordProtection,
             ImageUpdateWakeSignal updateWakeSignal,
             CancellationToken ct) =>
         {
@@ -35,6 +37,8 @@ public static class SettingsEndpoints
                 return Results.BadRequest(new { error = "MinimumFreeSpaceReserveBytes must be between 0 and 1099511627776." });
             if (request.OperationRetentionDays is < 0 or > 3650)
                 return Results.BadRequest(new { error = "OperationRetentionDays must be between 0 and 3650." });
+            if (request.PasswordProtectionEnabled == true && !passwordProtection.IsConfigured)
+                return Results.BadRequest(new { error = "Configure a username and a password of at least 12 characters before enabling access protection." });
 
             var current = await store.GetAsync(ct);
             if (current.DryRun && !request.DryRun &&
@@ -55,12 +59,15 @@ public static class SettingsEndpoints
                 request.AllowFilesystemTimestampFallback,
                 request.MinimumFreeSpaceReserveBytes ?? current.MinimumFreeSpaceReserveBytes,
                 request.AutomaticImageUpdatesEnabled ?? current.AutomaticImageUpdatesEnabled,
-                request.OperationRetentionDays ?? current.OperationRetentionDays), ct);
+                request.OperationRetentionDays ?? current.OperationRetentionDays,
+                request.PasswordProtectionEnabled ?? current.PasswordProtectionEnabled), ct);
 
             // Turning automatic updates on checks now instead of whenever the six-hour period that was
             // running while it was still off happens to end.
             if (updated.AutomaticImageUpdatesEnabled && !current.AutomaticImageUpdatesEnabled)
                 updateWakeSignal.Wake();
+            if (current.PasswordProtectionEnabled && !updated.PasswordProtectionEnabled)
+                passwordProtection.RevokeAllSessions();
 
             return Results.Ok(updated);
         });
@@ -86,6 +93,7 @@ public static class SettingsEndpoints
                 settings.MinimumFreeSpaceReserveBytes,
                 settings.AutomaticImageUpdatesEnabled,
                 settings.OperationRetentionDays,
+                settings.PasswordProtectionEnabled,
                 automation = automationStatus.Snapshot()
             });
         });
@@ -194,6 +202,7 @@ public sealed record RuntimeSettingsRequest(
     long? MinimumFreeSpaceReserveBytes = null,
     bool? AutomaticImageUpdatesEnabled = null,
     int? OperationRetentionDays = null,
+    bool? PasswordProtectionEnabled = null,
     string? LiveModeConfirmation = null);
 
 public sealed record StorageShareStatus(

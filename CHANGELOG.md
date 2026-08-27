@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [2.0.0] - 2026-08-27
+
+### Added
+
+- optional single-user access protection for public-facing deployments. The switch lives under **Automation & safety**, while the username and password stay in `.env`/environment variables and are never written to runtime settings. When enabled, the Web UI, API, OpenAPI documentation and metrics require a rate-limited cookie login; unsafe API calls also require a same-origin header, sessions are revoked on logout or when protection is disabled, protected responses are not cached, and `/health` remains available to the container healthcheck. Use HTTPS whenever MomentFerry leaves the trusted network.
+
 ## [1.11.15] - 2026-08-26
 
 ### Changed

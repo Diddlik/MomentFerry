@@ -26,7 +26,7 @@ public sealed class RuntimeSettingsStoreTests
     }
 
     [Fact]
-    public async Task Update_PersistsStorageReserveAndAutomaticUpdateMode()
+    public async Task Update_PersistsStorageReserveAutomaticUpdateAndPasswordProtection()
     {
         var directory = Path.Combine(Path.GetTempPath(), "momentferry-tests", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(directory, "runtime-settings.json");
@@ -35,12 +35,14 @@ public sealed class RuntimeSettingsStoreTests
             var store = new JsonRuntimeSettingsStore(path, new());
             await store.UpdateAsync(new MomentFerryRuntimeSettings(
                 MinimumFreeSpaceReserveBytes: 2L * 1024 * 1024 * 1024,
-                AutomaticImageUpdatesEnabled: true));
+                AutomaticImageUpdatesEnabled: true,
+                PasswordProtectionEnabled: true));
 
             var reloaded = await new JsonRuntimeSettingsStore(path, new()).GetAsync();
 
             Assert.Equal(2L * 1024 * 1024 * 1024, reloaded.MinimumFreeSpaceReserveBytes);
             Assert.True(reloaded.AutomaticImageUpdatesEnabled);
+            Assert.True(reloaded.PasswordProtectionEnabled);
         }
         finally
         {

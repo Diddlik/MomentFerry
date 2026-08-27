@@ -85,6 +85,9 @@
           <span class="side-row-label">Appearance</span>
           <span class="side-row-value" id="themeLabel">Dark</span>
         </button>
+        <button class="side-row hidden" type="button" id="logoutButton">
+          <span class="side-row-label">Sign out</span>
+        </button>
         <button class="side-card" type="button" id="versionCard" data-view="updates">
           <div class="kicker">Version</div>
           <div class="side-version" id="versionRunning">checking…</div>
@@ -542,6 +545,21 @@
         </div>
 
         <form id="settingsForm">
+          <div class="card card-lg">
+            <div class="card-title">Access protection</div>
+            <div class="card-sub" style="margin-bottom:16px">Protect the Web UI and API when MomentFerry is reachable outside your trusted network.</div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-name">Require a username and password</div>
+                <div class="setting-desc" id="passwordProtectionStatus">Checking configured credentials…</div>
+              </div>
+              <label class="switch" title="Require a username and password">
+                <input id="settingsPasswordProtection" type="checkbox" />
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+          </div>
+
           <div class="card card-lg">
             <div class="card-title">Safety</div>
             <div class="card-sub" style="margin-bottom:16px">These three decide whether MomentFerry may ever touch a file.</div>

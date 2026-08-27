@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in · MomentFerry</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/i18n.js"></script>
+  <script>
+    try {
+      var theme = localStorage.getItem('momentferry.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch (e) {}
+  </script>
+</head>
+<body class="login-shell">
+  <main class="login-card">
+    <div class="login-brand">
+      <img src="/favicon.svg" width="34" height="34" alt="" />
+      <div>
+        <div class="brand-name">MomentFerry</div>
+        <div class="card-sub">Protected console</div>
+      </div>
+    </div>
+    <h1 class="login-title">Sign in</h1>
+    <p class="card-sub">Enter the credentials configured for this MomentFerry instance.</p>
+    <form id="loginForm" class="login-form">
+      <label class="field">Username
+        <input id="loginUsername" name="username" autocomplete="username" maxlength="1024" required autofocus />
+      </label>
+      <label class="field">Password
+        <input id="loginPassword" name="password" type="password" autocomplete="current-password" maxlength="1024" required />
+      </label>
+      <button class="btn btn-acc btn-lg" id="loginSubmit" type="submit">Sign in</button>
+      <p class="message" id="loginMessage" role="status" aria-live="polite"></p>
+    </form>
+    <label class="login-language" for="languageSelect">
+      <span>Language</span>
+      <select id="languageSelect" aria-label="Interface language"></select>
+    </label>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>
