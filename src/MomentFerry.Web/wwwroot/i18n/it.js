@@ -510,5 +510,21 @@ window.MF_MESSAGES = {
   "{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors": "{{sources}} origini · {{matched}} abbinati · {{wouldMove}} verrebbero spostati · {{executed}} eseguiti · {{skipped}} saltati · {{errors}} errori",
   "{{total}} media files · {{stable}} stable · {{waiting}} waiting": "{{total}} file multimediali · {{stable}} stabili · {{waiting}} in attesa",
   "{{version}} available →": "{{version}} disponibile →",
-  "{{version}} is available": "{{version}} è disponibile"
+  "{{version}} is available": "{{version}} è disponibile",
+  "Access protection": "Protezione dell’accesso",
+  "Access protection is not configured.": "La protezione dell’accesso non è configurata.",
+  "Checking configured credentials…": "Verifica delle credenziali configurate…",
+  "Credentials configured through environment variables.": "Credenziali configurate tramite variabili d’ambiente.",
+  "Enter the credentials configured for this MomentFerry instance.": "Inserisci le credenziali configurate per questa istanza di MomentFerry.",
+  "Invalid username or password.": "Nome utente o password non validi.",
+  "Password": "Password",
+  "Protected console": "Console protetta",
+  "Protect the Web UI and API when MomentFerry is reachable outside your trusted network.": "Proteggi l’interfaccia Web e l’API quando MomentFerry è raggiungibile fuori dalla rete attendibile.",
+  "Require a username and password": "Richiedi nome utente e password",
+  "Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.": "Imposta prima MOMENTFERRY_USERNAME e MOMENTFERRY_PASSWORD nel file .env.",
+  "Sign in": "Accedi",
+  "Sign out": "Esci",
+  "Signing in…": "Accesso in corso…",
+  "Too many sign-in attempts. Try again in a minute.": "Troppi tentativi di accesso. Riprova tra un minuto.",
+  "Username": "Nome utente"
 };

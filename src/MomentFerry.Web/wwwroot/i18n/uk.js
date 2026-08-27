@@ -510,5 +510,21 @@ window.MF_MESSAGES = {
   "{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors": "джерел: {{sources}} · зіставлено: {{matched}} · перемістилося б: {{wouldMove}} · виконано: {{executed}} · пропущено: {{skipped}} · помилок: {{errors}}",
   "{{total}} media files · {{stable}} stable · {{waiting}} waiting": "медіафайлів: {{total}} · стабільних: {{stable}} · очікують: {{waiting}}",
   "{{version}} available →": "{{version}} доступна →",
-  "{{version}} is available": "{{version}} доступна"
+  "{{version}} is available": "{{version}} доступна",
+  "Access protection": "Захист доступу",
+  "Access protection is not configured.": "Захист доступу не налаштовано.",
+  "Checking configured credentials…": "Перевірка налаштованих облікових даних…",
+  "Credentials configured through environment variables.": "Облікові дані налаштовано через змінні середовища.",
+  "Enter the credentials configured for this MomentFerry instance.": "Введіть облікові дані, налаштовані для цього екземпляра MomentFerry.",
+  "Invalid username or password.": "Неправильне ім’я користувача або пароль.",
+  "Password": "Пароль",
+  "Protected console": "Захищена консоль",
+  "Protect the Web UI and API when MomentFerry is reachable outside your trusted network.": "Захистіть вебінтерфейс і API, якщо MomentFerry доступний за межами довіреної мережі.",
+  "Require a username and password": "Вимагати ім’я користувача та пароль",
+  "Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.": "Спочатку задайте MOMENTFERRY_USERNAME і MOMENTFERRY_PASSWORD у файлі .env.",
+  "Sign in": "Увійти",
+  "Sign out": "Вийти",
+  "Signing in…": "Вхід…",
+  "Too many sign-in attempts. Try again in a minute.": "Забагато спроб входу. Повторіть за хвилину.",
+  "Username": "Ім’я користувача"
 };

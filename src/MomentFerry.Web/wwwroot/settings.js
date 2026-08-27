@@ -4,14 +4,24 @@
 --------------------------------------------------------------------------- */
 
 let currentRuntimeSettings = null;
+let currentAuthStatus = null;
 const LIVE_CONFIRMATION = 'ENABLE_LIVE_TRANSFERS';
 const LIVE_PHRASE = 'ENABLE LIVE';
 
 async function settingsRequest(url, options = {}) {
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-MomentFerry-Request': '1',
+      ...(options.headers || {})
+    },
     ...options
   });
+
+  if (response.status === 401) {
+    const returnUrl = `${location.pathname}${location.search}${location.hash}`;
+    location.assign(`/login.html?returnUrl=${encodeURIComponent(returnUrl)}`);
+  }
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
@@ -39,6 +49,7 @@ function applySettingsToForm(settings) {
   $('settingsTimestampFallback').checked = settings.allowFilesystemTimestampFallback;
   $('settingsFreeSpaceReserve').value = Math.round(settings.minimumFreeSpaceReserveBytes / 1048576);
   $('settingsAutomaticImageUpdates').checked = settings.automaticImageUpdatesEnabled;
+  $('settingsPasswordProtection').checked = settings.passwordProtectionEnabled;
 
   appInfo = { ...appInfo, ...settings };
   renderMode();
@@ -57,6 +68,7 @@ function settingsFromForm(overrides = {}) {
     allowFilesystemTimestampFallback: $('settingsTimestampFallback').checked,
     minimumFreeSpaceReserveBytes: Number($('settingsFreeSpaceReserve').value) * 1048576,
     automaticImageUpdatesEnabled: $('settingsAutomaticImageUpdates').checked,
+    passwordProtectionEnabled: $('settingsPasswordProtection').checked,
     liveModeConfirmation: null,
     ...overrides
   };
@@ -65,6 +77,8 @@ function settingsFromForm(overrides = {}) {
 async function saveSettings(overrides, messageTarget) {
   const target = messageTarget ? $(messageTarget) : null;
   try {
+    const enablingProtection = !currentRuntimeSettings?.passwordProtectionEnabled &&
+      (overrides.passwordProtectionEnabled ?? $('settingsPasswordProtection').checked);
     const updated = await settingsRequest('/api/v1/settings', {
       method: 'PUT',
       body: JSON.stringify(settingsFromForm(overrides))
@@ -77,6 +91,10 @@ async function saveSettings(overrides, messageTarget) {
         : 'Saved. LIVE transfers are enabled.');
     }
     await loadAutomationStatus();
+    await loadAuthStatus();
+    if (enablingProtection && updated.passwordProtectionEnabled) {
+      location.assign('/login.html');
+    }
     return updated;
   } catch (error) {
     if (target) {
@@ -86,6 +104,16 @@ async function saveSettings(overrides, messageTarget) {
     await loadRuntimeSettings();
     throw error;
   }
+}
+
+async function loadAuthStatus() {
+  currentAuthStatus = await settingsRequest('/api/v1/auth/status', { cache: 'no-store' });
+  const toggle = $('settingsPasswordProtection');
+  toggle.disabled = !currentAuthStatus.credentialsConfigured && !toggle.checked;
+  $('passwordProtectionStatus').textContent = t(currentAuthStatus.credentialsConfigured
+    ? 'Credentials configured through environment variables.'
+    : 'Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.');
+  $('logoutButton').classList.toggle('hidden', !currentAuthStatus.protectionEnabled);
 }
 
 async function loadRuntimeSettings() {
@@ -253,6 +281,11 @@ $('resetSettings').addEventListener('click', async () => {
 
 $('refreshAutomationStatus').addEventListener('click', loadAutomationStatus);
 
+$('logoutButton').addEventListener('click', async () => {
+  await settingsRequest('/api/v1/auth/logout', { method: 'POST' });
+  location.assign('/login.html');
+});
+
 /* Image updates ------------------------------------------------------------ */
 
 /** Matches ImageUpdateRequest.RequiredConfirmation: the API refuses an install without it. */
@@ -394,7 +427,7 @@ async function pollAutomationStatus() {
   setTimeout(pollAutomationStatus, automationInfo?.cycleRunning ? 2000 : 5000);
 }
 
-loadRuntimeSettings();
+loadRuntimeSettings().then(loadAuthStatus).catch(() => {});
 pollAutomationStatus();
 settingsRequest('/api/v1/updates').then(renderImageUpdate).catch(() => {
   $('versionRunning').textContent = t('unknown');

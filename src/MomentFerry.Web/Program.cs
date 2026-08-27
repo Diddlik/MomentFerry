@@ -1,5 +1,8 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.RateLimiting;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Application.Services;
 using MomentFerry.Core.Domain;
@@ -11,6 +14,7 @@ using MomentFerry.Web.Api;
 using MomentFerry.Web.Background;
 using MomentFerry.Web.Diagnostics;
 using MomentFerry.Web.Integrations;
+using MomentFerry.Web.Security;
 using MomentFerry.Web.Updates;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +28,31 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient();
+var passwordProtection = new PasswordProtectionOptions(
+    builder.Configuration["MomentFerry:Authentication:Username"],
+    builder.Configuration["MomentFerry:Authentication:Password"]);
+builder.Services.AddSingleton(passwordProtection);
+builder.Services.AddAuthentication(PasswordProtectionOptions.AuthenticationScheme)
+    .AddCookie(PasswordProtectionOptions.AuthenticationScheme, options =>
+    {
+        options.Cookie.Name = "MomentFerry.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromHours(12);
+        options.SlidingExpiration = true;
+    });
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter(PasswordProtectionOptions.LoginRateLimitPolicy, limiter =>
+    {
+        limiter.PermitLimit = 5;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+});
 
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<IFileSystemGateway, LocalFileSystemGateway>();
@@ -55,7 +84,8 @@ var runtimeDefaults = new MomentFerryRuntimeSettings(
     builder.Configuration.GetValue("MomentFerry:Automation:AllowFilesystemTimestampFallback", false),
     builder.Configuration.GetValue("MomentFerry:MinimumFreeSpaceReserveBytes", LocalFileSystemGateway.DefaultMinimumFreeSpaceReserveBytes),
     builder.Configuration.GetValue("MomentFerry:Updates:Automatic", false),
-    builder.Configuration.GetValue("MomentFerry:OperationRetentionDays", 0));
+    builder.Configuration.GetValue("MomentFerry:OperationRetentionDays", 0),
+    builder.Configuration.GetValue("MomentFerry:Authentication:Enabled", false));
 var runtimeSettingsPath = builder.Configuration["MomentFerry:RuntimeSettingsPath"] ?? "data/runtime-settings.json";
 builder.Services.AddSingleton<IRuntimeSettingsStore>(
     new JsonRuntimeSettingsStore(runtimeSettingsPath, runtimeDefaults));
@@ -121,7 +151,22 @@ if (recoveryReport.Total > 0)
     }
 }
 
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers["X-Frame-Options"] = "DENY";
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseDefaultFiles();
+app.UseRouting();
+app.UseAuthentication();
+app.UseRateLimiter();
+app.UseMiddleware<PasswordProtectionMiddleware>();
 app.UseStaticFiles();
 app.MapOpenApi();
 app.UseSwaggerUI(options =>
@@ -156,6 +201,7 @@ app.MapGet("/api/v1/info", async (
         settings.MaxFilesPerSharePerCycle,
         settings.AllowFilesystemTimestampFallback,
         settings.MinimumFreeSpaceReserveBytes,
+        settings.PasswordProtectionEnabled,
         filesystemWatcherEnabled = true,
         mqttEnabled = builder.Configuration.GetValue("MomentFerry:Mqtt:Enabled", false),
         allowedRoots
@@ -389,6 +435,7 @@ app.MapTransferEndpoints();
 app.MapSettingsEndpoints();
 app.MapMaintenanceEndpoints();
 app.MapUpdateEndpoints();
+app.MapPasswordProtectionEndpoints();
 
 app.Run();
 

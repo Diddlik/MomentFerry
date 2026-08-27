@@ -510,5 +510,21 @@ window.MF_MESSAGES = {
   "{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors": "źródeł: {{sources}} · dopasowano: {{matched}} · zostałoby przeniesione: {{wouldMove}} · wykonano: {{executed}} · pominięto: {{skipped}} · błędów: {{errors}}",
   "{{total}} media files · {{stable}} stable · {{waiting}} waiting": "plików multimedialnych: {{total}} · stabilnych: {{stable}} · czekających: {{waiting}}",
   "{{version}} available →": "{{version}} dostępna →",
-  "{{version}} is available": "{{version}} jest dostępna"
+  "{{version}} is available": "{{version}} jest dostępna",
+  "Access protection": "Ochrona dostępu",
+  "Access protection is not configured.": "Ochrona dostępu nie jest skonfigurowana.",
+  "Checking configured credentials…": "Sprawdzanie skonfigurowanych danych logowania…",
+  "Credentials configured through environment variables.": "Dane logowania skonfigurowano przez zmienne środowiskowe.",
+  "Enter the credentials configured for this MomentFerry instance.": "Wprowadź dane logowania skonfigurowane dla tej instancji MomentFerry.",
+  "Invalid username or password.": "Nieprawidłowa nazwa użytkownika lub hasło.",
+  "Password": "Hasło",
+  "Protected console": "Chroniona konsola",
+  "Protect the Web UI and API when MomentFerry is reachable outside your trusted network.": "Chroń interfejs WWW i API, gdy MomentFerry jest dostępny poza zaufaną siecią.",
+  "Require a username and password": "Wymagaj nazwy użytkownika i hasła",
+  "Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.": "Najpierw ustaw MOMENTFERRY_USERNAME i MOMENTFERRY_PASSWORD w pliku .env.",
+  "Sign in": "Zaloguj się",
+  "Sign out": "Wyloguj się",
+  "Signing in…": "Logowanie…",
+  "Too many sign-in attempts. Try again in a minute.": "Zbyt wiele prób logowania. Spróbuj ponownie za minutę.",
+  "Username": "Nazwa użytkownika"
 };

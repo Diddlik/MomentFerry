@@ -17,6 +17,11 @@ services:
       MomentFerry__Automation__AllowFilesystemTimestampFallback: "false"
       MomentFerry__MinimumFreeSpaceReserveBytes: "536870912"
 
+      # Optional access protection. Put the values in .env, then enable it in
+      # Automation & safety. Secrets are never stored in runtime-settings.json.
+      MomentFerry__Authentication__Username: ${MOMENTFERRY_USERNAME:-}
+      MomentFerry__Authentication__Password: ${MOMENTFERRY_PASSWORD:-}
+
       # Optional MQTT integration. Disabled by default.
       MomentFerry__Mqtt__Enabled: "false"
       MomentFerry__Mqtt__Host: "192.168.1.10"

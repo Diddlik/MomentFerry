@@ -510,5 +510,21 @@ window.MF_MESSAGES = {
   "{{sources}} sources · {{matched}} matched · {{wouldMove}} would move · {{executed}} executed · {{skipped}} skipped · {{errors}} errors": "источников: {{sources}} · сопоставлено: {{matched}} · переместилось бы: {{wouldMove}} · выполнено: {{executed}} · пропущено: {{skipped}} · ошибок: {{errors}}",
   "{{total}} media files · {{stable}} stable · {{waiting}} waiting": "медиафайлов: {{total}} · стабильных: {{stable}} · ожидают: {{waiting}}",
   "{{version}} available →": "{{version}} доступна →",
-  "{{version}} is available": "{{version}} доступна"
+  "{{version}} is available": "{{version}} доступна",
+  "Access protection": "Защита доступа",
+  "Access protection is not configured.": "Защита доступа не настроена.",
+  "Checking configured credentials…": "Проверка настроенных учётных данных…",
+  "Credentials configured through environment variables.": "Учётные данные настроены через переменные окружения.",
+  "Enter the credentials configured for this MomentFerry instance.": "Введите учётные данные, настроенные для этого экземпляра MomentFerry.",
+  "Invalid username or password.": "Неверное имя пользователя или пароль.",
+  "Password": "Пароль",
+  "Protected console": "Защищённая консоль",
+  "Protect the Web UI and API when MomentFerry is reachable outside your trusted network.": "Защитите веб-интерфейс и API, если MomentFerry доступен за пределами доверенной сети.",
+  "Require a username and password": "Требовать имя пользователя и пароль",
+  "Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.": "Сначала задайте MOMENTFERRY_USERNAME и MOMENTFERRY_PASSWORD в файле .env.",
+  "Sign in": "Войти",
+  "Sign out": "Выйти",
+  "Signing in…": "Вход…",
+  "Too many sign-in attempts. Try again in a minute.": "Слишком много попыток входа. Повторите через минуту.",
+  "Username": "Имя пользователя"
 };

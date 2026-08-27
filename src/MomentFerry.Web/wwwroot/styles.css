@@ -74,6 +74,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.login-shell {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-card {
+  width: min(420px, 100%);
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: var(--shadow);
+}
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 30px; }
+.login-title { margin-bottom: 7px; font-size: 24px; letter-spacing: -.025em; }
+.login-form { display: grid; gap: 16px; margin-top: 24px; }
+.login-language {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line);
+  color: var(--mut); font-size: 12.5px;
+}
+.login-language select { width: auto; min-width: 140px; }
+
 h1, h2, h3, p, ol, ul { margin: 0; }
 a { color: var(--acc); text-decoration: none; }
 a:hover { color: var(--acctxt); }

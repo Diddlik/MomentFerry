@@ -140,6 +140,25 @@ docker compose up -d
 
 Open `http://<server>:8080`.
 
+### Optional access protection
+
+Copy `.env.example` to `.env` beside the Compose file and set a strong, unique username and a password of at least 12 characters. `.env` is ignored by Git and must not be committed:
+
+```dotenv
+MOMENTFERRY_USERNAME=momentferry
+MOMENTFERRY_PASSWORD=replace-with-a-long-random-password
+```
+
+Recreate the container so it receives the values, then enable **Require a username and password** under **Automation & safety**:
+
+```bash
+docker compose up -d --force-recreate momentferry
+```
+
+The credentials remain environment-only; the runtime settings persist just the enabled/disabled switch. When enabled, the Web UI, REST API, OpenAPI documentation and metrics require a signed-in session. `/health` and the login/status endpoints remain public so container healthchecks and login continue to work. Mutating API clients must send the session cookie plus `X-MomentFerry-Request: 1`.
+
+Use HTTPS through a reverse proxy when exposing MomentFerry outside the trusted network. Authentication prevents unauthorised access, but plain HTTP does not encrypt the password or session cookie in transit.
+
 The `data` volume contains the SQLite database, persistent runtime settings and the last completed automation status. Docker environment values act as initial defaults; settings saved in the Web UI are stored in `data/runtime-settings.json` and take precedence for runtime automation values.
 
 The example file also carries the container healthcheck, the environment defaults matching the settings above, and a commented updater companion. That companion plus `MomentFerry__Updates__WatchtowerUrl` and `__WatchtowerToken` is what lets the in-app *Install update* button actually restart onto the new image; without it MomentFerry only reports that a newer release exists.

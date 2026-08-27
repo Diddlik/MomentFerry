@@ -131,9 +131,17 @@ function setOperationMode(mode) {
 
 async function request(url, options = {}) {
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-MomentFerry-Request': '1',
+      ...(options.headers || {})
+    },
     ...options
   });
+  if (response.status === 401) {
+    const returnUrl = `${location.pathname}${location.search}${location.hash}`;
+    location.assign(`/login.html?returnUrl=${encodeURIComponent(returnUrl)}`);
+  }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
