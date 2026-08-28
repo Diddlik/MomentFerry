@@ -6,6 +6,8 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [2.0.1] - 2026-08-28
+
 ### Fixed
 
 - the access-protection switch stayed disabled with no explanation when the credentials in the environment were incomplete or the password was shorter than the required 12 characters. `GET /api/v1/auth/status` now returns a `credentialsIssue` sentence — the values are never included — and the Settings view shows it in red under the switch, so the reason it cannot be enabled is visible.
