@@ -17,6 +17,19 @@ public sealed class PasswordProtectionTests
         Assert.False(options.Matches("owner", "wrong"));
         Assert.False(options.Matches(null, null));
         Assert.False(new PasswordProtectionOptions("owner", "too-short").IsConfigured);
+        Assert.Null(options.ConfigurationIssue);
+    }
+
+    [Fact]
+    public void ConfigurationIssueExplainsWhyCredentialsAreUnusable()
+    {
+        Assert.Null(new PasswordProtectionOptions(null, null).ConfigurationIssue);
+        Assert.Contains("at least 12 characters",
+            new PasswordProtectionOptions("owner", "too-short").ConfigurationIssue);
+        Assert.Contains("MOMENTFERRY_PASSWORD",
+            new PasswordProtectionOptions("owner", null).ConfigurationIssue);
+        Assert.Contains("MOMENTFERRY_USERNAME",
+            new PasswordProtectionOptions(null, "correct horse battery staple").ConfigurationIssue);
     }
 
     [Fact]

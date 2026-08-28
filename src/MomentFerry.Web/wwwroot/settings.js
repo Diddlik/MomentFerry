@@ -110,9 +110,13 @@ async function loadAuthStatus() {
   currentAuthStatus = await settingsRequest('/api/v1/auth/status', { cache: 'no-store' });
   const toggle = $('settingsPasswordProtection');
   toggle.disabled = !currentAuthStatus.credentialsConfigured && !toggle.checked;
-  $('passwordProtectionStatus').textContent = t(currentAuthStatus.credentialsConfigured
-    ? 'Credentials configured through environment variables.'
-    : 'Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.');
+  const status = $('passwordProtectionStatus');
+  status.style.color = currentAuthStatus.credentialsIssue ? 'var(--red)' : '';
+  status.textContent = currentAuthStatus.credentialsConfigured
+    ? t('Credentials configured through environment variables.')
+    : currentAuthStatus.credentialsIssue
+      ? t(currentAuthStatus.credentialsIssue)
+      : t('Set MOMENTFERRY_USERNAME and MOMENTFERRY_PASSWORD in your .env file first.');
   $('logoutButton').classList.toggle('hidden', !currentAuthStatus.protectionEnabled);
 }
 

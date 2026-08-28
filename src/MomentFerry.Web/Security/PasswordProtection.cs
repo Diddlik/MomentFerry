@@ -23,6 +23,28 @@ public sealed class PasswordProtectionOptions(string? username, string? password
         !string.IsNullOrWhiteSpace(_username) && _username.Length <= 256 &&
         _password.Length is >= 12 and <= 1024;
 
+    /// <summary>
+    /// A human-readable reason the credentials are not usable, or null when they are.
+    /// Returns null when nothing is configured at all, so the UI can show the initial
+    /// "set the environment variables" hint instead of a partial-configuration error.
+    /// Never reveals the credential values.
+    /// </summary>
+    public string? ConfigurationIssue
+    {
+        get
+        {
+            if (IsConfigured) return null;
+            var hasUsername = !string.IsNullOrWhiteSpace(_username);
+            var hasPassword = _password.Length > 0;
+            if (!hasUsername && !hasPassword) return null;
+            if (!hasUsername) return "A password is set but MOMENTFERRY_USERNAME is empty.";
+            if (_username.Length > 256) return "The configured username is longer than 256 characters.";
+            if (!hasPassword) return "A username is set but MOMENTFERRY_PASSWORD is empty.";
+            if (_password.Length < 12) return "The configured password must contain at least 12 characters.";
+            return "The configured password is longer than 1024 characters.";
+        }
+    }
+
     public bool Matches(string? username, string? password) =>
         IsConfigured && SecureEquals(username, _username) & SecureEquals(password, _password);
 
@@ -160,6 +182,7 @@ public static class PasswordProtectionEndpoints
             {
                 protectionEnabled = settings.PasswordProtectionEnabled,
                 credentialsConfigured = options.IsConfigured,
+                credentialsIssue = options.ConfigurationIssue,
                 authenticated = options.HasValidSession(context.User)
             });
         });
