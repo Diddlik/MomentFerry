@@ -26,6 +26,7 @@ let taskClock = null;
 let scanRequestedAt = null;
 let scanScheduleError = '';
 let manualScanResult = null;
+let routingPreview = null;
 
 const TITLES = () => ({
   overview: [t('Overview'), t('Every watched folder, the running event and anything waiting on you.')],
@@ -86,10 +87,40 @@ function destinationPathFor(event, destination) {
   return `${destination ? destination.path : 'destination'}/${destinationFolder(event)}`;
 }
 
+/* Display preferences live in this browser, like the interface language. */
+const CLOCK_STORAGE_KEY = 'momentferry.clock';
+const WEEK_START_STORAGE_KEY = 'momentferry.weekStart';
+
+function readDisplayPreference(key, allowed) {
+  try {
+    const stored = localStorage.getItem(key);
+    if (allowed.includes(stored)) return stored;
+  } catch {}
+  return 'auto';
+}
+
+const CLOCK_PREFERENCE = readDisplayPreference(CLOCK_STORAGE_KEY, ['12', '24']);
+const WEEK_START_PREFERENCE = readDisplayPreference(WEEK_START_STORAGE_KEY, ['0', '1']);
+const TIME_OPTIONS = CLOCK_PREFERENCE === 'auto' ? {} : { hour12: CLOCK_PREFERENCE === '12' };
+const PICKER_HOUR12 = TIME_OPTIONS.hour12
+  ?? new Intl.DateTimeFormat(MF_LANG, { hour: 'numeric' }).resolvedOptions().hour12;
+
+// The region decides the week, not the UI language: an English UI in Germany still starts on Monday.
+function localeWeekStart() {
+  try {
+    const locale = new Intl.Locale(navigator.language || MF_LANG);
+    const info = locale.getWeekInfo?.() ?? locale.weekInfo;
+    if (info) return info.firstDay % 7;
+  } catch {}
+  return 1;
+}
+
+const WEEK_START = WEEK_START_PREFERENCE === 'auto' ? localeWeekStart() : Number(WEEK_START_PREFERENCE);
+
 function formatDate(value) {
   if (!value) return t('unknown');
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString(MF_LANG);
+  return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString(MF_LANG, TIME_OPTIONS);
 }
 
 function formatBytes(value) {
@@ -117,6 +148,135 @@ function fromLocalInput(value) {
   if (Number.isNaN(date.getTime())) throw new Error(t('Invalid date/time.'));
   return date.toISOString();
 }
+
+/* Date/time picker -------------------------------------------------------
+   Replaces datetime-local, whose native picker follows the OS locale and honours
+   neither the clock nor the week-start preference. The input shows the formatted
+   value; data-value holds the local "YYYY-MM-DDTHH:mm" the form submits. */
+
+let pickerInput = null;
+let pickerMonth = null;
+
+function pad2(number) {
+  return String(number).padStart(2, '0');
+}
+
+function setDateTime(id, value) {
+  const input = $(id);
+  input.dataset.value = value || '';
+  input.value = value
+    ? new Date(value).toLocaleString(MF_LANG, { dateStyle: 'medium', timeStyle: 'short', ...TIME_OPTIONS })
+    : '';
+}
+
+function pickerValue() {
+  return pickerInput.dataset.value ? new Date(pickerInput.dataset.value) : null;
+}
+
+function commitPicker(date) {
+  setDateTime(pickerInput.id,
+    `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`);
+}
+
+function renderPicker() {
+  const value = pickerValue();
+  const year = pickerMonth.getFullYear();
+  const month = pickerMonth.getMonth();
+  const leading = (new Date(year, month, 1).getDay() - WEEK_START + 7) % 7;
+  const today = new Date();
+  const isDay = (date, day) => date && date.getFullYear() === year && date.getMonth() === month && date.getDate() === day;
+  // 7 January 2024 was a Sunday, so counting on from it yields the weekday names in display order.
+  const weekdays = Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 7 + WEEK_START + i).toLocaleDateString(MF_LANG, { weekday: 'short' }));
+  const days = Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => i + 1).map(day =>
+    `<button type="button" class="dt-day${isDay(value, day) ? ' is-selected' : ''}${isDay(today, day) ? ' is-today' : ''}" data-day="${day}">${day}</button>`);
+  const hours = Array.from({ length: 24 }, (_, hour) => `<option value="${hour}"${value?.getHours() === hour ? ' selected' : ''}>${
+    PICKER_HOUR12 ? new Date(2024, 0, 1, hour).toLocaleTimeString(MF_LANG, { hour: 'numeric', hour12: true }) : pad2(hour)}</option>`);
+  const minutes = Array.from({ length: 60 }, (_, minute) =>
+    `<option value="${minute}"${value?.getMinutes() === minute ? ' selected' : ''}>${pad2(minute)}</option>`);
+
+  $('dtPicker').innerHTML = `
+    <div class="dt-head">
+      <button type="button" class="btn btn-sm btn-ghost" data-month="-1" aria-label="${t('Previous month')}">‹</button>
+      <span>${pickerMonth.toLocaleDateString(MF_LANG, { month: 'long', year: 'numeric' })}</span>
+      <button type="button" class="btn btn-sm btn-ghost" data-month="1" aria-label="${t('Next month')}">›</button>
+    </div>
+    <div class="dt-grid">
+      ${weekdays.map(name => `<span class="dt-weekday">${name}</span>`).join('')}
+      ${'<span></span>'.repeat(leading)}${days.join('')}
+    </div>
+    <div class="dt-time">
+      <select id="dtHour" aria-label="${t('Hour')}">${hours.join('')}</select>
+      <span>:</span>
+      <select id="dtMinute" aria-label="${t('Minute')}">${minutes.join('')}</select>
+    </div>
+    <div class="actions" style="justify-content:flex-end">
+      ${'optional' in pickerInput.dataset ? `<button type="button" class="btn btn-sm btn-ghost" data-clear>${t('Clear')}</button>` : ''}
+      <button type="button" class="btn btn-sm btn-acc" data-done>${t('Done')}</button>
+    </div>`;
+}
+
+function openPicker(input) {
+  pickerInput = input;
+  const shown = pickerValue() || new Date();
+  pickerMonth = new Date(shown.getFullYear(), shown.getMonth(), 1);
+  renderPicker();
+  const picker = $('dtPicker');
+  const rect = input.getBoundingClientRect();
+  picker.classList.remove('hidden');
+  picker.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  picker.style.left = `${Math.max(0, Math.min(rect.left, document.documentElement.clientWidth - picker.offsetWidth - 8)) + window.scrollX}px`;
+}
+
+function closePicker() {
+  $('dtPicker').classList.add('hidden');
+  pickerInput?.focus();
+  pickerInput = null;
+}
+
+document.addEventListener('click', event => {
+  const input = event.target.closest?.('input[data-datetime]');
+  if (input) openPicker(input);
+});
+
+// pointerdown rather than click: a click inside re-renders the picker and detaches its target.
+document.addEventListener('pointerdown', event => {
+  if (pickerInput && event.target !== pickerInput && !event.target.closest('#dtPicker')) closePicker();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.target.matches?.('input[data-datetime]') && ['Enter', ' ', 'ArrowDown'].includes(event.key)) {
+    event.preventDefault();
+    openPicker(event.target);
+  } else if (event.key === 'Escape' && pickerInput) {
+    closePicker();
+  }
+});
+
+$('dtPicker').addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.dataset.month) {
+    pickerMonth = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + Number(button.dataset.month), 1);
+    renderPicker();
+  } else if (button.dataset.day) {
+    commitPicker(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), Number(button.dataset.day),
+      Number($('dtHour').value), Number($('dtMinute').value)));
+    renderPicker();
+  } else if ('clear' in button.dataset) {
+    setDateTime(pickerInput.id, '');
+    closePicker();
+  } else {
+    closePicker();
+  }
+});
+
+$('dtPicker').addEventListener('change', () => {
+  const value = pickerValue();
+  if (!value) return;
+  value.setHours(Number($('dtHour').value), Number($('dtMinute').value));
+  commitPicker(value);
+});
 
 function operationModeValue() {
   const picked = document.querySelector('input[name="eventOperation"]:checked');
@@ -543,7 +703,7 @@ function renderNextScanCountdown() {
   const seconds = Math.max(0, Math.ceil((next - Date.now()) / 1000));
   const result = manualScanResult
     ? t('Manual scan completed {{time}} · {{matched}} matched · {{wouldMove}} would move', {
-      time: new Date(manualScanResult.completedAt).toLocaleTimeString(MF_LANG),
+      time: new Date(manualScanResult.completedAt).toLocaleTimeString(MF_LANG, TIME_OPTIONS),
       matched: formatNumber(manualScanResult.matched),
       wouldMove: formatNumber(manualScanResult.wouldMove)
     }) + (manualScanResult.errors ? ` · ${t(manualScanResult.errors === 1 ? '{{count}} error' : '{{count}} errors', { count: formatNumber(manualScanResult.errors) })}` : '') + ' · '
@@ -557,7 +717,7 @@ function renderNextScanCountdown() {
   const remainder = seconds % 60;
   const clock = `${hours ? `${hours}:` : ''}${String(minutes).padStart(hours ? 2 : 1, '0')}:${String(remainder).padStart(2, '0')}`;
   target.textContent = `${result}${t('Next scan in {{clock}}', { clock })}`;
-  target.title = t('Scheduled for {{time}}', { time: new Date(next).toLocaleString(MF_LANG) });
+  target.title = t('Scheduled for {{time}}', { time: new Date(next).toLocaleString(MF_LANG, TIME_OPTIONS) });
 }
 
 async function triggerScanNow() {
@@ -1126,51 +1286,187 @@ async function previewRouting() {
       `${t('Routing preview')} · ${share?.name || t('source')}`,
       'preview',
       () => request(`/api/v1/shares/${id}/routing-preview?limit=2000`));
-    const dry = appInfo.dryRun !== false;
-
-    const rows = result.items.map(item => {
-      const event = item.event;
-      const canExecute = item.state === 'Matched' && event && !dry;
-      const destination = item.destinationPath
-        ? escapeHtml(item.destinationPath)
-        : (item.message ? escapeHtml(item.message) : t('stays where it is'));
-      return `
-        <div class="td strong" title="${escapeHtml(item.mediaFile.originalName)}">${escapeHtml(item.mediaFile.originalName)}</div>
-        <div class="td">${escapeHtml(formatDate(item.mediaFile.capturedAt))}</div>
-        <div class="td">${escapeHtml(event ? event.name : t(item.state))}</div>
-        <div class="td mono">
-          ${destination}
-          ${canExecute ? `<div style="margin-top:6px"><button class="btn btn-sm" type="button" onclick="executeTransfer('${item.mediaFile.id}','${event.id}')">${t('Execute')}</button></div>` : ''}
-        </div>`;
-    }).join('');
-
-    $('routingList').innerHTML = `
-      <div class="card card-flush">
-        <div class="table-summary">
-          <span><b>${formatNumber(result.total)}</b> ${t('scanned')}</span>
-          <span><b class="acc">${formatNumber(result.matched)}</b> ${t('matched an event')}</span>
-          <span><b>${formatNumber(result.unmatched)}</b> ${t('outside any event')}</span>
-          <span><b class="amb">${formatNumber(result.ambiguous)}</b> ${t('need a decision')}</span>
-        </div>
-        <div class="table-scroll">
-          <div class="table table-preview">
-            <div class="th">${t('File')}</div>
-            <div class="th">${t('Captured')}</div>
-            <div class="th">${t('Match')}</div>
-            <div class="th">${t('Destination')}</div>
-            ${rows}
-          </div>
-        </div>
-        ${result.items.length ? '' : `<div class="table-empty">${t('No stable media files found yet. Scan again after the stability interval.')}</div>`}
-      </div>`;
-
-    $('routingSummary').textContent = dry ? t('Dry Run: nothing here can be moved or deleted.') : '';
+    routingPreview = { result, share };
+    renderRoutingPreview();
+    $('routingSummary').textContent = appInfo.dryRun !== false ? t('Dry Run: nothing here can be moved or deleted.') : '';
   } catch (error) {
+    routingPreview = null;
     $('routingList').innerHTML = `<div class="empty"><strong>${t('Preview failed')}</strong>${t('See the message below.')}</div>`;
     $('routingSummary').textContent = error.message;
     $('routingSummary').className = 'message error';
   }
 }
+
+function renderRoutingPreview() {
+  if (!routingPreview) return;
+  const { result } = routingPreview;
+  const dry = appInfo.dryRun !== false;
+  const query = $('routingFilter').value.trim().toLowerCase();
+  const state = $('routingStateFilter').value;
+  const visible = result.items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => (!state || item.state === state) &&
+      (!query || item.mediaFile.sourcePath.toLowerCase().includes(query)));
+
+  const rows = visible.map(({ item, index }) => {
+    const event = item.event;
+    const canExecute = item.state === 'Matched' && event && !dry;
+    const destination = item.destinationPath
+      ? escapeHtml(item.destinationPath)
+      : (item.message ? escapeHtml(item.message) : t('stays where it is'));
+    return `
+      <div class="td strong" title="${escapeHtml(item.mediaFile.sourcePath)}">
+        ${escapeHtml(item.mediaFile.originalName)}
+        <div><button class="link-btn" type="button" onclick="openFileAnalysis(${index})">${t('Details')}</button></div>
+      </div>
+      <div class="td">${escapeHtml(formatDate(item.mediaFile.capturedAt))}</div>
+      <div class="td">${escapeHtml(event ? event.name : t(item.state))}</div>
+      <div class="td mono">
+        ${destination}
+        ${canExecute ? `<div style="margin-top:6px"><button class="btn btn-sm" type="button" onclick="executeTransfer('${item.mediaFile.id}','${event.id}')">${t('Execute')}</button></div>` : ''}
+      </div>`;
+  }).join('');
+
+  $('routingList').innerHTML = `
+    <div class="card card-flush">
+      <div class="table-summary">
+        <span><b>${formatNumber(result.total)}</b> ${t('scanned')}</span>
+        <span><b class="acc">${formatNumber(result.matched)}</b> ${t('matched an event')}</span>
+        <span><b>${formatNumber(result.unmatched)}</b> ${t('outside any event')}</span>
+        <span><b class="amb">${formatNumber(result.ambiguous)}</b> ${t('need a decision')}</span>
+        ${visible.length !== result.items.length ? `<span><b>${formatNumber(visible.length)}</b> ${t('shown')}</span>` : ''}
+      </div>
+      <div class="table-scroll">
+        <div class="table table-preview">
+          <div class="th">${t('File')}</div>
+          <div class="th">${t('Captured')}</div>
+          <div class="th">${t('Match')}</div>
+          <div class="th">${t('Destination')}</div>
+          ${rows}
+        </div>
+      </div>
+      ${result.items.length ? '' : `<div class="table-empty">${t('No stable media files found yet. Scan again after the stability interval.')}</div>`}
+      ${result.items.length && !visible.length ? `<div class="table-empty">${t('No file matches the filter.')}</div>` : ''}
+    </div>`;
+}
+
+/* File analysis -----------------------------------------------------------
+   Repeats the checks RoutingPreviewService and MediaRoutingWorker apply, so the
+   answer to "why not this event?" is the one the worker would give. */
+
+let analysisItem = null;
+
+function eventChecks(event, mediaFile, share) {
+  const captured = new Date(mediaFile.capturedAt);
+  const end = event.endAt ? new Date(event.endAt) : null;
+  const group = groups.find(x => x.id === event.sourceGroupId);
+  const inGroup = Boolean(group?.shareIds.includes(share.id));
+  const destination = shares.find(x => x.id === event.destinationShareId);
+  const writable = Boolean(destination?.enabled && destination.role !== 'Source');
+  const windowText = captured < new Date(event.startAt)
+    ? t('Captured {{captured}}, before the event starts at {{start}}.', { captured: formatDate(mediaFile.capturedAt), start: formatDate(event.startAt) })
+    : end && captured > end
+      ? t('Captured {{captured}}, after the event ends at {{end}}.', { captured: formatDate(mediaFile.capturedAt), end: formatDate(event.endAt) })
+      : t('Captured {{captured}}, inside the event window.', { captured: formatDate(mediaFile.capturedAt) });
+  return [
+    {
+      ok: event.status === 'Active' || event.status === 'Closed',
+      text: t('Status is {{status}}. Only Active and Closed events take files.', { status: t(event.status) })
+    },
+    { ok: captured >= new Date(event.startAt) && (!end || captured <= end), text: windowText },
+    {
+      ok: inGroup,
+      text: !group
+        ? t("The event's source group no longer exists.")
+        : t(inGroup ? '{{share}} contributes through the group {{group}}.' : '{{share}} is not a member of the group {{group}}.', { share: share.name, group: group.name })
+    },
+    {
+      ok: writable,
+      text: !destination
+        ? t("The event's destination share no longer exists.")
+        : t(writable ? 'Destination {{share}} is writable.' : 'Destination {{share}} is disabled or not writable by role.', { share: destination.name })
+    }
+  ];
+}
+
+// Ambiguity is decided before the destination is looked at, so only the first three checks count.
+function eventMatches(event, mediaFile, share) {
+  return eventChecks(event, mediaFile, share).slice(0, 3).every(check => check.ok);
+}
+
+function renderEventAnalysis() {
+  const { mediaFile } = analysisItem;
+  const { share } = routingPreview;
+  const event = events.find(x => x.id === $('analysisEvent').value);
+  if (!event) {
+    $('analysisChecks').innerHTML = '';
+    return;
+  }
+
+  const checks = eventChecks(event, mediaFile, share);
+  const others = events.filter(x => x.id !== event.id && eventMatches(x, mediaFile, share));
+  if (others.length) {
+    checks.push({ ok: false, text: t('Also matches {{events}}. A file that matches more than one event is not routed until only one matches.', { events: others.map(x => x.name).join(', ') }) });
+  }
+  if (mediaFile.timestampSource === 'FileLastWriteTimeUtc' && !appInfo.allowFilesystemTimestampFallback) {
+    checks.push({ ok: false, text: t('No capture time in the metadata, and the file-date fallback is off, so automation skips this file.') });
+  }
+
+  const takes = checks.every(check => check.ok);
+  $('analysisChecks').innerHTML = checks
+    .map(check => `<div class="modal-fact"><span>${escapeHtml(check.text)}</span><b class="${check.ok ? '' : 'amb'}">${check.ok ? '✓' : '✕'}</b></div>`)
+    .join('')
+    + `<div class="setting-desc" style="margin-top:10px">${escapeHtml(t(takes ? 'This event takes the file.' : 'This event does not take the file.'))}</div>`;
+}
+
+function formatOffset(minutes) {
+  if (minutes == null) return t('none, the share time zone stands in');
+  const absolute = Math.abs(minutes);
+  return `UTC${minutes < 0 ? '−' : '+'}${pad2(Math.trunc(absolute / 60))}:${pad2(absolute % 60)}`;
+}
+
+window.openFileAnalysis = function (index) {
+  analysisItem = routingPreview.result.items[index];
+  const { mediaFile } = analysisItem;
+  const facts = [
+    [t('Path'), mediaFile.sourcePath],
+    [t('Size'), formatBytes(mediaFile.size)],
+    [t('Type'), `${t(mediaFile.mediaType)} · ${mediaFile.extension}`],
+    [t('Captured'), mediaFile.capturedAt ? `${formatDate(mediaFile.capturedAt)} · ${new Date(mediaFile.capturedAt).toISOString()}` : t('unknown')],
+    [t('Read from'), mediaFile.timestampSource || t('unknown')],
+    [t('Reported offset'), formatOffset(mediaFile.capturedAtOffsetMinutes)],
+    [t('Time zone inferred'), t(mediaFile.isTimezoneInferred ? 'yes' : 'no')],
+    [t('Camera'), [mediaFile.cameraMake, mediaFile.cameraModel].filter(Boolean).join(' ') || t('unknown')],
+    [t('File modified'), formatDate(mediaFile.sourceLastWriteAt)],
+    [t('Preview result'), [t(analysisItem.state), analysisItem.event?.name, analysisItem.message].filter(Boolean).join(' · ')]
+  ];
+
+  $('analysisTitle').textContent = mediaFile.originalName;
+  $('analysisFacts').innerHTML = facts
+    .map(([label, value]) => `<div class="modal-fact"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`)
+    .join('');
+  $('analysisEvent').innerHTML = `<option value="">${t('Choose an event…')}</option>`
+    + events.map(event => `<option value="${event.id}">${escapeHtml(event.name)} · ${escapeHtml(t(event.status))}</option>`).join('');
+  $('analysisEvent').value = analysisItem.event?.id || '';
+  renderEventAnalysis();
+  $('analysisModal').classList.remove('hidden');
+};
+
+function closeFileAnalysis() {
+  $('analysisModal').classList.add('hidden');
+  analysisItem = null;
+}
+
+$('analysisEvent').addEventListener('change', renderEventAnalysis);
+$('analysisClose').addEventListener('click', closeFileAnalysis);
+$('analysisModal').addEventListener('click', event => {
+  if (event.target === $('analysisModal')) closeFileAnalysis();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && analysisItem) closeFileAnalysis();
+});
+$('routingFilter').addEventListener('input', renderRoutingPreview);
+$('routingStateFilter').addEventListener('change', renderRoutingPreview);
 
 /* Share / group / event actions ------------------------------------------ */
 
@@ -1303,8 +1599,8 @@ window.editEvent = function (id) {
   $('eventType').value = event.type || '';
   $('eventSourceGroup').value = event.sourceGroupId;
   $('eventDestination').value = event.destinationShareId;
-  $('eventStart').value = toLocalInput(event.startAt);
-  $('eventEnd').value = event.endAt ? toLocalInput(event.endAt) : '';
+  setDateTime('eventStart', toLocalInput(event.startAt));
+  setDateTime('eventEnd', event.endAt ? toLocalInput(event.endAt) : '');
   $('eventStatus').value = event.status;
   setOperationMode(event.operationMode);
   $('eventConflict').value = event.conflictStrategy;
@@ -1681,7 +1977,9 @@ function resetEventForm() {
   $('eventId').value = '';
   $('eventFormTitle').textContent = t('New event');
   $('eventType').value = 'Vacation';
-  $('eventStart').value = toLocalInput(new Date().toISOString());
+  setDateTime('eventStart', toLocalInput(new Date().toISOString()));
+  // form.reset() clears the shown text but not data-value.
+  setDateTime('eventEnd', '');
   $('eventStatus').value = 'Planned';
   setOperationMode('SafeMove');
   $('eventConflict').value = 'AppendSourceName';
@@ -1752,8 +2050,8 @@ $('eventForm').addEventListener('submit', async (event) => {
   const body = {
     name: $('eventName').value,
     type: $('eventType').value || null,
-    startAt: fromLocalInput($('eventStart').value),
-    endAt: $('eventEnd').value ? fromLocalInput($('eventEnd').value) : null,
+    startAt: fromLocalInput($('eventStart').dataset.value),
+    endAt: $('eventEnd').dataset.value ? fromLocalInput($('eventEnd').dataset.value) : null,
     status: $('eventStatus').value,
     sourceGroupId: $('eventSourceGroup').value,
     destinationShareId: $('eventDestination').value,

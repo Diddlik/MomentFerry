@@ -196,8 +196,8 @@
               <label class="field">Type<input id="eventType" placeholder="Vacation" /></label>
               <label class="field">Who is contributing<select id="eventSourceGroup" required></select></label>
               <label class="field">Where it lands<select id="eventDestination" required></select></label>
-              <label class="field">Starts<input id="eventStart" type="datetime-local" required /></label>
-              <label class="field">Ends (leave open to keep collecting)<input id="eventEnd" type="datetime-local" /></label>
+              <label class="field">Starts<input id="eventStart" type="text" readonly data-datetime /></label>
+              <label class="field">Ends (leave open to keep collecting)<input id="eventEnd" type="text" readonly data-datetime data-optional /></label>
             </div>
 
             <div>
@@ -452,6 +452,16 @@
           <button class="btn" type="button" id="previewRouting">Scan and preview</button>
           <div class="push" style="font-size:12px;color:var(--mut)">Reads capture metadata only. Nothing is copied or deleted by a preview.</div>
         </div>
+        <div class="card row">
+          <input id="routingFilter" type="search" placeholder="Filter by file name or path" aria-label="Filter by file name or path" style="flex:1" />
+          <select id="routingStateFilter" aria-label="Filter by result" style="width:auto">
+            <option value="">All results</option>
+            <option value="Matched">Matched</option>
+            <option value="Unmatched">Unmatched</option>
+            <option value="Ambiguous">Ambiguous</option>
+            <option value="InvalidDestination">InvalidDestination</option>
+          </select>
+        </div>
         <div id="routingList">
           <div class="empty"><strong>No preview yet</strong>Run a scan to see exactly which file would land where, before anything moves.</div>
         </div>
@@ -625,6 +635,27 @@
             <p class="message" id="settingsMessage"></p>
           </div>
         </form>
+
+        <div class="card card-lg">
+          <div class="card-title">Date and time</div>
+          <div class="card-sub" style="margin-bottom:16px">Saved in this browser. Changing a value reloads the page.</div>
+          <div class="grid-3">
+            <label class="field">Time format
+              <select id="clockPreference">
+                <option value="auto">Language default</option>
+                <option value="24">24-hour</option>
+                <option value="12">12-hour</option>
+              </select>
+            </label>
+            <label class="field">First day of the week
+              <select id="weekStartPreference">
+                <option value="auto">Regional default</option>
+                <option value="1">Monday</option>
+                <option value="0">Sunday</option>
+              </select>
+            </label>
+          </div>
+        </div>
       </section>
 
       <!-- IMAGE UPDATES ------------------------------------------------ -->
@@ -698,6 +729,24 @@
       <p class="message" id="liveModalMessage"></p>
     </div>
   </div>
+
+  <!-- FILE ANALYSIS MODAL ------------------------------------------ -->
+  <div class="modal-backdrop hidden" id="analysisModal" role="dialog" aria-modal="true" aria-labelledby="analysisTitle">
+    <div class="modal modal-wide">
+      <div class="modal-title mono" id="analysisTitle" style="margin-bottom:14px"></div>
+      <div class="kicker" style="margin-bottom:9px">Metadata used for routing</div>
+      <div class="modal-facts" id="analysisFacts"></div>
+      <label class="field" style="margin-bottom:12px">Check against an event
+        <select id="analysisEvent"></select>
+      </label>
+      <div class="modal-facts" id="analysisChecks"></div>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn btn-ghost btn-lg" type="button" id="analysisClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dt-picker hidden" id="dtPicker" role="dialog" aria-label="Choose date and time"></div>
 
   <script src="/app.js"></script>
   <script src="/settings.js"></script>

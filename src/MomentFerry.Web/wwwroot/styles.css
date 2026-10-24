@@ -521,6 +521,26 @@ button.guide-step:hover { background: var(--panel); }
 .modal-fact { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.9; color: var(--mut); }
 .modal-fact b { font-weight: 400; font-family: var(--mono); color: var(--txt); }
 .modal-fact b.amb { color: var(--amb); }
+.modal-wide { width: 680px; max-height: calc(100vh - 48px); overflow-y: auto; }
+.modal-wide .modal-fact b { text-align: right; overflow-wrap: anywhere; }
+
+/* Date/time picker ---------------------------------------------------- */
+input[data-datetime] { cursor: pointer; }
+.dt-picker {
+  position: absolute; z-index: 60; width: 280px; padding: 12px;
+  background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow);
+}
+.dt-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--txt); margin-bottom: 8px; }
+.dt-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 10px; }
+.dt-weekday { font-size: 11px; color: var(--dim); text-align: center; padding: 4px 0; }
+.dt-day {
+  border: 1px solid transparent; background: transparent; color: var(--txt);
+  border-radius: 7px; padding: 6px 0; font: 400 12.5px var(--sans); cursor: pointer;
+}
+.dt-day:hover { border-color: var(--line2); }
+.dt-day.is-today { color: var(--acc); }
+.dt-day.is-selected { background: var(--accbg); border-color: var(--accline); color: var(--acctxt); }
+.dt-time { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--mut); }
 
 /* Responsive ---------------------------------------------------------- */
 @media (max-width: 1040px) {

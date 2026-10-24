@@ -222,7 +222,7 @@ async function loadAutomationStatus() {
       target.textContent = `${enabled} · ${mode} · ${t('no cycle recorded yet')} · ${formatStorageStatus(storage)}`;
     } else {
       const completed = automation.lastCycleCompletedAt
-        ? new Date(automation.lastCycleCompletedAt).toLocaleTimeString(MF_LANG)
+        ? new Date(automation.lastCycleCompletedAt).toLocaleTimeString(MF_LANG, TIME_OPTIONS)
         : t('running');
       const error = automation.lastError ? ` · ${t('last error: {{error}}', { error: automation.lastError })}` : '';
       target.textContent = `${enabled} · ${mode} · ${t('last cycle {{time}}', { time: completed })} · `
@@ -285,6 +285,21 @@ $('resetSettings').addEventListener('click', async () => {
 
 $('refreshAutomationStatus').addEventListener('click', loadAutomationStatus);
 
+/* Date and time display ------------------------------------------------------ */
+
+[['clockPreference', CLOCK_STORAGE_KEY, CLOCK_PREFERENCE], ['weekStartPreference', WEEK_START_STORAGE_KEY, WEEK_START_PREFERENCE]]
+  .forEach(([id, key, current]) => {
+    const select = $(id);
+    select.value = current;
+    select.addEventListener('change', () => {
+      try {
+        if (select.value === 'auto') localStorage.removeItem(key); else localStorage.setItem(key, select.value);
+      } catch {}
+      // Every renderer formats at render time, so a reload is the whole switch.
+      window.location.reload();
+    });
+  });
+
 $('logoutButton').addEventListener('click', async () => {
   await settingsRequest('/api/v1/auth/logout', { method: 'POST' });
   location.assign('/login.html');
@@ -305,7 +320,7 @@ function renderImageUpdate(status) {
   const install = $('installImageUpdate');
 
   const completed = status.lastUpdateCompletedAt
-    ? ` · ${t('updated {{time}}', { time: new Date(status.lastUpdateCompletedAt).toLocaleString(MF_LANG) })}`
+    ? ` · ${t('updated {{time}}', { time: new Date(status.lastUpdateCompletedAt).toLocaleString(MF_LANG, TIME_OPTIONS) })}`
     : '';
 
   if (status.updateAvailable && status.latestVersion) {
