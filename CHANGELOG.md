@@ -6,6 +6,14 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [2.1.0] - 2026-10-24
+
+### Added
+
+- a **Date and time** card under **Automation & safety** chooses the time format (language default, 24-hour or 12-hour) and the first day of the week (regional default, Monday or Sunday). Both are kept in this browser, like the interface language, and apply to every date shown in the console.
+- the event start and end fields open a date picker of MomentFerry's own. The browser's native picker follows the operating system's locale and could honour neither setting; this one starts the week on the chosen day and lists hours in the chosen format. The optional end date has a **Clear** button.
+- the Routing preview can be filtered by file name or path and by result. Every file has a **Details** dialog that shows the metadata routing used — capture time and the tag it was read from, the reported offset, whether the zone was inferred, the camera — and checks the file against any event you pick: status, capture window, source-group membership, destination, other events that also match, and the file-date fallback. Each check says why it passes or fails, so a file that lands outside an event no longer has to be diagnosed from the logs.
+
 ## [2.0.1] - 2026-08-28
 
 ### Fixed
