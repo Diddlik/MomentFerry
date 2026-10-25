@@ -6,6 +6,21 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [2.2.0] - 2026-10-25
+
+### Added
+
+- logging that shows every process and explains every error. Each API request that changes something is logged with its status and duration, and a refused request carries the reason it was refused. Transfers, previews, renames, recovery and maintenance actions log what they did; a failed transfer is logged with the state it failed in and the state it was left in. Entries in the **Activity log** that carry an exception can be expanded to the full exception with its stack trace. Per-file detail — every transfer stage, every rename decision, every unreadable file — is available with `Logging__LogLevel__MomentFerry=Debug` in the container log.
+- a request the browser abandons is now logged as such, with how long it ran. A reverse proxy that times out answers the browser with **504** by itself, and until now that left no trace on the server.
+
+### Changed
+
+- the routing preview runs as a background job. It used to be a single request that read metadata for up to 2000 files, which takes minutes on a NAS: a reverse proxy in front of MomentFerry gave up with **504**, and because the cancelled request threw away every metadata read it had done, trying again started from nothing. The console now starts the preview, shows its progress in the background-task tracker, and fetches the result when it is done. API clients use `POST /api/v1/shares/{id}/routing-preview`, which returns a job, and `GET /api/v1/routing-preview-jobs/{id}`; the previous `GET /api/v1/shares/{id}/routing-preview` is gone.
+
+### Fixed
+
+- metadata that could not be read — most visibly when ExifTool is missing — was reported as a file without a capture time, because the error message landed in the MIME-type field. The error is now reported as the error: the preview names it for each file, and the log says how many files of a share could not be read, with examples.
+
 ## [2.1.0] - 2026-10-24
 
 ### Added
