@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 
@@ -8,7 +9,8 @@ public sealed class OperationRecoveryService(
     IMediaEventRepository events,
     IFileSystemGateway fileSystem,
     IHashService hashService,
-    IClock clock)
+    IClock clock,
+    ILogger<OperationRecoveryService> logger)
 {
     public async Task<RecoveryReport> RecoverAsync(CancellationToken cancellationToken = default)
     {
@@ -39,6 +41,7 @@ public sealed class OperationRecoveryService(
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, "Recovery of operation {Operation} for {Source} failed", operation.Id, operation.SourcePath);
                 var safeState = HasCommittedDestination(operation.State)
                     ? MediaOperationState.SourceFinalizePending
                     : MediaOperationState.RetryPending;
@@ -46,6 +49,11 @@ public sealed class OperationRecoveryService(
                 await operations.UpsertAsync(pendingState, CancellationToken.None);
                 items.Add(new RecoveryItem(operation.Id, pendingState.State, pendingState.LastError));
             }
+        }
+
+        foreach (var item in items)
+        {
+            logger.LogDebug("Recovery left operation {Operation} as {State}: {Message}", item.OperationId, item.State, item.Message);
         }
 
         return new RecoveryReport(

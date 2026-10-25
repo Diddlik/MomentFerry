@@ -190,7 +190,8 @@ GET  /api/v1/settings
 PUT  /api/v1/settings
 GET  /api/v1/folders?role=Source
 GET  /api/v1/shares
-GET  /api/v1/shares/{id}/routing-preview
+POST /api/v1/shares/{id}/routing-preview
+GET  /api/v1/routing-preview-jobs/{id}
 GET  /api/v1/source-groups
 GET  /api/v1/rename-presets
 GET  /api/v1/camera-mappings
@@ -217,6 +218,16 @@ POST /api/v1/recovery
 ```
 
 The full contract is served as OpenAPI JSON at `/openapi/v1.json`, with a browsable UI at `/docs`.
+
+## Logging
+
+The **Activity log** on the Operations view shows the most recent 500 entries at Information and above: one line per scan, preview, transfer outcome, rename, maintenance action and changing API request, with the reason for every refusal and the full exception for every error. The container log carries the same lines. For per-file detail, such as each transfer stage, each rename decision and each file whose metadata could not be read, set:
+
+```text
+Logging__LogLevel__MomentFerry=Debug
+```
+
+Debug lines go to the container log only, so a large share cannot push everything else out of the Activity log. When the browser shows **504** behind a reverse proxy, the log says which request the client abandoned and how long it had run.
 
 ## MQTT
 

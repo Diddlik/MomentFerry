@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 
@@ -13,7 +14,8 @@ public sealed class SafeTransferService(
     IHashService hashService,
     DestinationPathResolver destinationPaths,
     RenameContextFactory renameContexts,
-    IClock clock)
+    IClock clock,
+    ILogger<SafeTransferService> logger)
 {
     public async Task<TransferExecutionResult> ExecuteAsync(
         Guid mediaFileId,
@@ -73,6 +75,13 @@ public sealed class SafeTransferService(
             StartedAt = clock.UtcNow
         };
         await operations.UpsertAsync(operation, cancellationToken);
+        logger.LogDebug(
+            "Transfer {Operation} started: {Source} to {Destination} ({Mode}, event {Event})",
+            operationId,
+            mediaFile.SourcePath,
+            desiredDestination,
+            mediaEvent.OperationMode,
+            mediaEvent.Name);
 
         try
         {
@@ -121,6 +130,7 @@ public sealed class SafeTransferService(
                 sourceHash: sourceHash);
             await operations.UpsertAsync(operation, cancellationToken);
 
+            logger.LogDebug("Transfer {Operation}: copying to staging {Staging}", operationId, stagingPath);
             await fileSystem.CopyFileAsync(mediaFile.SourcePath, stagingPath, cancellationToken);
 
             operation = Transition(operation, MediaOperationState.Verifying);
@@ -130,7 +140,7 @@ public sealed class SafeTransferService(
             {
                 operation = Transition(operation, MediaOperationState.Quarantined, lastError: "Staging file size does not match source.");
                 await operations.UpsertAsync(operation, cancellationToken);
-                return new TransferExecutionResult(operation, false, false, operation.LastError);
+                return Quarantined(operation, false);
             }
 
             var stagedHash = await HashPathAsync(stagingPath, cancellationToken);
@@ -145,7 +155,7 @@ public sealed class SafeTransferService(
                     destinationHash: stagedHash,
                     lastError: "SHA-256 verification failed or source changed during copy.");
                 await operations.UpsertAsync(operation, cancellationToken);
-                return new TransferExecutionResult(operation, false, false, operation.LastError);
+                return Quarantined(operation, false);
             }
 
             var commitConflict = await ResolveExistingDestinationAsync(
@@ -177,7 +187,7 @@ public sealed class SafeTransferService(
             {
                 operation = Transition(operation, MediaOperationState.Quarantined, destinationPath: finalDestination, lastError: "Final destination verification failed.");
                 await operations.UpsertAsync(operation, cancellationToken);
-                return new TransferExecutionResult(operation, false, false, operation.LastError);
+                return Quarantined(operation, false);
             }
 
             var finalHash = await HashPathAsync(finalDestination, cancellationToken);
@@ -190,13 +200,15 @@ public sealed class SafeTransferService(
                     destinationHash: finalHash,
                     lastError: "Final destination SHA-256 does not match source.");
                 await operations.UpsertAsync(operation, cancellationToken);
-                return new TransferExecutionResult(operation, false, true, operation.LastError);
+                return Quarantined(operation, true);
             }
 
             // Only after the destination is verified byte for byte: a stamped timestamp must never be
             // the reason a transfer is judged complete, and a filesystem that refuses the stamp must not
             // undo a good copy.
+            logger.LogDebug("Transfer {Operation}: committed {Destination}, SHA-256 verified", operationId, finalDestination);
             var stampMessage = ApplyCaptureTimestamp(finalDestination, mediaFile.CapturedAt!.Value);
+            if (stampMessage is not null) logger.LogWarning("Transfer {Operation}: {Message}", operationId, stampMessage);
 
             operation = Transition(
                 operation,
@@ -213,6 +225,7 @@ public sealed class SafeTransferService(
                 await operations.UpsertAsync(operation, cancellationToken);
                 fileSystem.DeleteFile(mediaFile.SourcePath);
                 deleted = true;
+                logger.LogDebug("Transfer {Operation}: released source {Source}", operationId, mediaFile.SourcePath);
             }
 
             operation = Transition(operation, MediaOperationState.Completed, completedAt: clock.UtcNow);
@@ -227,10 +240,11 @@ public sealed class SafeTransferService(
         {
             operation = Transition(operation, MediaOperationState.Quarantined, lastError: ex.Message);
             await operations.UpsertAsync(operation, CancellationToken.None);
-            return new TransferExecutionResult(operation, false, false, ex.Message);
+            return Quarantined(operation, false);
         }
         catch (Exception ex)
         {
+            var failedIn = operation.State;
             operation = Transition(
                 operation,
                 HasCommittedDestination(operation.State)
@@ -239,6 +253,13 @@ public sealed class SafeTransferService(
                 retryCount: operation.RetryCount + 1,
                 lastError: ex.Message);
             await operations.UpsertAsync(operation, CancellationToken.None);
+            logger.LogError(
+                ex,
+                "Transfer {Operation} of {Source} failed while {FailedIn}; left as {State}",
+                operationId,
+                mediaFile.SourcePath,
+                failedIn,
+                operation.State);
             throw;
         }
     }
@@ -252,6 +273,12 @@ public sealed class SafeTransferService(
     {
         if (mediaEvent.DuplicateStrategy == DuplicateStrategy.KeepBoth)
             return null;
+
+        logger.LogDebug(
+            "Transfer {Operation}: identical content already stored at {Path}; duplicate strategy {Strategy}",
+            operation.Id,
+            existingPath,
+            mediaEvent.DuplicateStrategy);
 
         if (mediaEvent.DuplicateStrategy != DuplicateStrategy.SafeMoveToExisting)
         {
@@ -287,6 +314,7 @@ public sealed class SafeTransferService(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                logger.LogWarning(ex, "Transfer {Operation}: could not release source {Source}", operation.Id, operation.SourcePath);
                 var pending = Transition(
                     committed,
                     MediaOperationState.SourceFinalizePending,
@@ -322,6 +350,12 @@ public sealed class SafeTransferService(
         {
             return $"Destination is verified, but its capture timestamp could not be applied: {ex.Message}";
         }
+    }
+
+    private TransferExecutionResult Quarantined(MediaOperation operation, bool destinationCreated)
+    {
+        logger.LogWarning("Transfer {Operation} quarantined {Source}: {Reason}", operation.Id, operation.SourcePath, operation.LastError);
+        return new TransferExecutionResult(operation, false, destinationCreated, operation.LastError);
     }
 
     private static void ValidateRoute(

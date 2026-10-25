@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 
@@ -25,7 +26,8 @@ public sealed class RoutedFileRenameService(
     RenameContextFactory renameContexts,
     IFileSystemGateway fileSystem,
     IHashService hashes,
-    IMediaMetadataExtractor metadata)
+    IMediaMetadataExtractor metadata,
+    ILogger<RoutedFileRenameService> logger)
 {
     /// <summary>How many individual decisions are reported back; the counts always cover everything.</summary>
     private const int MaxSamples = 50;
@@ -101,6 +103,7 @@ public sealed class RoutedFileRenameService(
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
+                logger.LogWarning(ex, "Rename could not resolve a name for {File}", current);
                 errors++;
                 Sample(samples, reasons, current, null, ex.Message);
                 continue;
@@ -139,6 +142,7 @@ public sealed class RoutedFileRenameService(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                logger.LogWarning(ex, "Rename could not read {File} to verify its checksum", current);
                 errors++;
                 Sample(samples, reasons, current, target, ex.Message);
                 continue;
@@ -187,10 +191,21 @@ public sealed class RoutedFileRenameService(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                logger.LogWarning(ex, "Rename of {File} to {Target} failed", current, target);
                 errors++;
                 Sample(samples, reasons, current, target, ex.Message);
             }
         }
+
+        logger.LogInformation(
+            "{Mode} rename for event {Event}: {Renamed} renamed, {Unchanged} unchanged, {Skipped} skipped, {Errors} errors{Reasons}",
+            dryRun ? "Planned" : "Applied",
+            mediaEvent.Name,
+            renamed,
+            unchanged,
+            skipped,
+            errors,
+            reasons.Count == 0 ? "" : " (" + string.Join("; ", reasons.Select(x => $"{x.Value}× {x.Key}")) + ")");
 
         return new RoutedRenameResult(
             mediaEvent.Id,
@@ -225,6 +240,7 @@ public sealed class RoutedFileRenameService(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
+            logger.LogWarning(ex, "Could not read the capture offset from {File}", storedPath);
             return mediaFile;
         }
 
@@ -261,13 +277,14 @@ public sealed class RoutedFileRenameService(
     private static StringComparer PathComparer =>
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private static void Sample(
+    private void Sample(
         List<RoutedRenameSample> samples,
         Dictionary<string, int> reasons,
         string from,
         string? to,
         string? reason)
     {
+        logger.LogDebug("Rename {From} to {To}: {Outcome}", from, to, reason ?? "renamed");
         if (reason is not null) reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
         if (samples.Count >= MaxSamples) return;
         samples.Add(new RoutedRenameSample(Path.GetFileName(from), to is null ? null : Path.GetFileName(to), reason));

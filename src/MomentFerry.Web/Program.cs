@@ -63,6 +63,7 @@ builder.Services.AddSingleton<MetadataPreviewService>();
 builder.Services.AddSingleton<DestinationPathResolver>();
 builder.Services.AddSingleton<RenameContextFactory>();
 builder.Services.AddSingleton<RoutingPreviewService>();
+builder.Services.AddSingleton<RoutingPreviewJobs>();
 builder.Services.AddSingleton<SafeTransferService>();
 builder.Services.AddSingleton<TransferCoordinator>();
 builder.Services.AddSingleton<OperationRecoveryService>();
@@ -162,6 +163,7 @@ app.Use(async (context, next) =>
     });
     await next();
 });
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseDefaultFiles();
 app.UseRouting();
 app.UseAuthentication();
@@ -249,6 +251,7 @@ app.MapGet("/api/v1/folders", (ShareRole role, string? path) =>
     }
     catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
     {
+        app.Logger.LogWarning(exception, "Folder browsing failed");
         return Results.Problem(
             title: "Folder browsing failed",
             detail: exception.Message,
@@ -287,6 +290,7 @@ app.MapGet("/api/v1/shares/{id:guid}/probe", async (
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
+            app.Logger.LogWarning(ex, "Share {Share} at {Path} is not readable", share.Name, share.Path);
             error = ex.Message;
         }
     }
@@ -341,6 +345,7 @@ app.MapGet("/api/v1/shares/{id:guid}/scan", async (
     }
     catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
     {
+        app.Logger.LogWarning(ex, "Scan of share {Share} failed", share.Name);
         return Results.Problem(
             title: "Share scan failed",
             detail: ex.Message,
@@ -373,6 +378,7 @@ app.MapGet("/api/v1/shares/{id:guid}/metadata-preview", async (
     }
     catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
     {
+        app.Logger.LogWarning(ex, "Metadata preview of share {Share} failed", share.Name);
         return Results.Problem(
             title: "Metadata preview failed",
             detail: ex.Message,

@@ -31,7 +31,9 @@ public sealed class ActivityLogProvider(ActivityLog log) : ILoggerProvider
 
             var message = formatter(state, exception);
             if (exception is not null) message = $"{message} — {exception.Message}";
-            log.Add(DateTimeOffset.UtcNow, logLevel, category, message);
+            // The full exception (type, inner exceptions, stack) is kept apart from the message, so the
+            // list stays one line per entry and the detail is there to expand when diagnosing.
+            log.Add(DateTimeOffset.UtcNow, logLevel, category, message, exception?.ToString());
         }
     }
 

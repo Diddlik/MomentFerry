@@ -10,6 +10,7 @@ public static class EventEndpoints
     public static IEndpointRouteBuilder MapEventEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/events");
+        var logger = app.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("MomentFerry.Web.Api.Events");
 
         group.MapGet("/", async (IMediaEventRepository repository, CancellationToken ct) =>
             Results.Ok(await repository.ListAsync(ct)));
@@ -113,6 +114,7 @@ public static class EventEndpoints
                 requestedAt,
                 ct);
             wakeSignal.WakeForBackfill(id);
+            logger.LogInformation("Route again requested for event {Event}: {Superseded} finished operations superseded", mediaEvent.Name, superseded);
 
             return Results.Accepted(value: new
             {

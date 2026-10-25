@@ -144,7 +144,8 @@ public sealed class RoutingPreviewServiceTests : IDisposable
             new RenameContextFactory(
                 new SqliteRenamePresetRepository(factory),
                 new SqliteCameraMappingRepository(factory)),
-            clock);
+            clock,
+            NullLogger<RoutingPreviewService>.Instance);
 
     private sealed class FixedMetadataExtractor(IClock clock) : IMediaMetadataExtractor
     {

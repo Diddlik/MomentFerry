@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using MomentFerry.Application.Abstractions;
 using MomentFerry.Core.Domain;
 
@@ -12,7 +14,8 @@ public sealed class RoutingPreviewService(
     IShareRepository shares,
     DestinationPathResolver destinationPaths,
     RenameContextFactory renameContexts,
-    IClock clock)
+    IClock clock,
+    ILogger<RoutingPreviewService> logger)
 {
     /// <summary>
     /// Walks the whole share and evaluates the least-recently-seen slice of it. This is the periodic
@@ -82,6 +85,7 @@ public sealed class RoutingPreviewService(
         Action<RoutingPreviewProgress>? progress,
         CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
         var metadata = new MediaMetadata?[stableFiles.Length];
         var cached = 0;
         var pending = new List<int>(stableFiles.Length);
@@ -118,9 +122,24 @@ public sealed class RoutingPreviewService(
                     file.FullPath,
                     file.MediaType,
                     ct);
+                if (metadata[index]!.Error is { } error)
+                    logger.LogDebug("Metadata could not be read for {File}: {Error}", file.FullPath, error);
                 var completed = cached + Interlocked.Increment(ref metadataRead);
                 progress?.Invoke(new RoutingPreviewProgress("Reading metadata", completed, stableFiles.Length));
             });
+
+        // One line per share rather than per file: a missing or broken ExifTool fails every file, and
+        // thousands of identical warnings would push everything else out of the activity log.
+        var unreadable = pending.Where(i => metadata[i]?.Error is not null).ToArray();
+        if (unreadable.Length > 0)
+        {
+            logger.LogWarning(
+                "Metadata could not be read for {Count} of {Total} files in {Share}, for example {Examples}",
+                unreadable.Length,
+                pending.Count,
+                sourceShare.Name,
+                string.Join("; ", unreadable.Take(3).Select(i => $"{stableFiles[i].FullPath}: {metadata[i]!.Error}")));
+        }
 
         var rename = await renameContexts.LoadAsync(cancellationToken);
         var groups = (await sourceGroups.ListAsync(cancellationToken))
@@ -223,6 +242,14 @@ public sealed class RoutingPreviewService(
             progress?.Invoke(new RoutingPreviewProgress("Matching events", index + 1, stableFiles.Length));
         }
 
+        logger.LogDebug(
+            "Evaluated {Total} files in {Share} in {Seconds:F1}s: metadata read for {Read}, {Cached} from the index, {Matched} matched",
+            stableFiles.Length,
+            sourceShare.Name,
+            stopwatch.Elapsed.TotalSeconds,
+            pending.Count,
+            cached,
+            result.Count(x => x.State == RoutingPreviewState.Matched));
         return result;
     }
 }

@@ -2,4 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MomentFerry.Core\MomentFerry.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+  </ItemGroup>
 </Project>

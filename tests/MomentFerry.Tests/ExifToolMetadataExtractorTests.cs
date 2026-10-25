@@ -34,6 +34,18 @@ public sealed class ExifToolMetadataExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task MissingExifTool_IsReportedAsTheError()
+    {
+        var extractor = new ExifToolMetadataExtractor(Path.Combine(_directory, "no-such-exiftool"));
+
+        var metadata = await extractor.ExtractAsync(_share, "x.jpg", MediaType.Image);
+
+        Assert.Null(metadata.CapturedAt);
+        Assert.Null(metadata.MimeType);
+        Assert.False(string.IsNullOrWhiteSpace(metadata.Error));
+    }
+
+    [Fact]
     public async Task QuickTimeDateWithoutOffset_IsReadAsUtc()
     {
         // Verified against the real file: exiftool reports "2026:04:21 12:00:28" for a recording made

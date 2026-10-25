@@ -577,5 +577,7 @@ window.MF_MESSAGES = {
   "Also matches {{events}}. A file that matches more than one event is not routed until only one matches.": "Corrisponde anche a {{events}}. Un file che corrisponde a più eventi viene instradato solo quando ne corrisponde uno solo.",
   "No capture time in the metadata, and the file-date fallback is off, so automation skips this file.": "Nessun orario di scatto nei metadati e il ripiego sulla data del file è disattivato, quindi l'automazione salta questo file.",
   "This event takes the file.": "Questo evento riceve il file.",
-  "This event does not take the file.": "Questo evento non riceve il file."
+  "This event does not take the file.": "Questo evento non riceve il file.",
+  "Error details": "Dettagli dell'errore",
+  "MomentFerry stopped before the preview finished.": "MomentFerry si è fermato prima della fine dell'anteprima."
 };

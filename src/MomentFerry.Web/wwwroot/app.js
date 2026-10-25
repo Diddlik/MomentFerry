@@ -1195,6 +1195,7 @@ function renderLogs() {
       <div style="min-width:0">
         <div style="font-size:12.5px;color:var(--txt)">${escapeHtml(entry.message)}</div>
         <div class="mono" style="font-size:11px;color:var(--mut);margin-top:2px">${escapeHtml(formatDate(entry.at))} · ${escapeHtml(entry.level)} · ${escapeHtml(entry.category)}</div>
+        ${entry.detail ? `<details class="log-detail"><summary>${t('Error details')}</summary><pre class="changelog">${escapeHtml(entry.detail)}</pre></details>` : ''}
       </div>
     </div>`).join('');
 }
@@ -1273,6 +1274,25 @@ function renderRoutingSources() {
     : `<option value="">${t('No source shares')}</option>`;
 }
 
+// The preview runs as a server-side job: one request would outlast a reverse proxy's timeout.
+async function waitForRoutingPreview(shareId, taskKey) {
+  let job = await request(`/api/v1/shares/${shareId}/routing-preview`, { method: 'POST' });
+  while (!job.completedAt) {
+    const task = backgroundTasks.get(taskKey);
+    if (task) {
+      const progress = job.progress;
+      task.detail = progress?.total
+        ? `${t(progress.phase)} · ${formatNumber(progress.processed)} / ${formatNumber(progress.total)}`
+        : t('starting…');
+      renderBackgroundTasks();
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    job = await request(`/api/v1/routing-preview-jobs/${job.id}`, { cache: 'no-store' });
+  }
+  if (job.error) throw new Error(t(job.error));
+  return job.result;
+}
+
 async function previewRouting() {
   const id = $('routingSource').value;
   if (!id) return;
@@ -1285,7 +1305,7 @@ async function previewRouting() {
       `routing-preview:${id}`,
       `${t('Routing preview')} · ${share?.name || t('source')}`,
       'preview',
-      () => request(`/api/v1/shares/${id}/routing-preview?limit=2000`));
+      () => waitForRoutingPreview(id, `routing-preview:${id}`));
     routingPreview = { result, share };
     renderRoutingPreview();
     $('routingSummary').textContent = appInfo.dryRun !== false ? t('Dry Run: nothing here can be moved or deleted.') : '';

@@ -12,14 +12,15 @@ public sealed class ActivityLog(int capacity = 500)
     private readonly ConcurrentQueue<ActivityLogEntry> _entries = new();
     private long _sequence;
 
-    public void Add(DateTimeOffset at, LogLevel level, string category, string message)
+    public void Add(DateTimeOffset at, LogLevel level, string category, string message, string? detail = null)
     {
         _entries.Enqueue(new ActivityLogEntry(
             Interlocked.Increment(ref _sequence),
             at,
             level.ToString(),
             category,
-            message));
+            message,
+            detail));
 
         while (_entries.Count > capacity && _entries.TryDequeue(out _)) { }
     }
@@ -37,4 +38,5 @@ public sealed record ActivityLogEntry(
     DateTimeOffset At,
     string Level,
     string Category,
-    string Message);
+    string Message,
+    string? Detail);

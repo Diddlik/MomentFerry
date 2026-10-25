@@ -310,6 +310,8 @@ public sealed class ExifToolMetadataExtractor(string executable = "exiftool") : 
     private static double? GetDouble(JsonElement root, string property) =>
         root.TryGetProperty(property, out var value) && value.TryGetDouble(out var result) ? result : null;
 
+    // Named, because positionally it once slid into MimeType when a field was added before it, and
+    // every extraction failure then looked like a file without a capture time.
     private static MediaMetadata Empty(string error) =>
-        new(null, null, false, null, null, null, null, null, null, error);
+        new(null, null, false, null, null, null, null, null, null, null, Error: error);
 }

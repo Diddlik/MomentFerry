@@ -432,7 +432,8 @@ public sealed class SafeTransferServiceTests : IAsyncLifetime
             new RenameContextFactory(
                 new SqliteRenamePresetRepository(connectionFactory),
                 new SqliteCameraMappingRepository(connectionFactory)),
-            new FixedClock(capturedAt.AddHours(1)));
+            new FixedClock(capturedAt.AddHours(1)),
+            NullLogger<SafeTransferService>.Instance);
         var coordinator = new TransferCoordinator(operations, service);
 
         var retry = new OperationRetryService(operations, events, shares, fileSystem, service, new FixedClock(capturedAt.AddHours(2)));

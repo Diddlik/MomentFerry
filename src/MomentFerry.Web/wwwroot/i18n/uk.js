@@ -577,5 +577,7 @@ window.MF_MESSAGES = {
   "Also matches {{events}}. A file that matches more than one event is not routed until only one matches.": "Також відповідає {{events}}. Файл, що відповідає кільком подіям, не переміщується, доки не залишиться одна.",
   "No capture time in the metadata, and the file-date fallback is off, so automation skips this file.": "У метаданих немає часу зйомки, а резервний варіант із датою файлу вимкнено, тому автоматизація пропускає цей файл.",
   "This event takes the file.": "Ця подія приймає файл.",
-  "This event does not take the file.": "Ця подія не приймає файл."
+  "This event does not take the file.": "Ця подія не приймає файл.",
+  "Error details": "Подробиці помилки",
+  "MomentFerry stopped before the preview finished.": "MomentFerry зупинився до завершення попереднього перегляду."
 };

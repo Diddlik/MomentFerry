@@ -14,6 +14,7 @@ public static class MaintenanceEndpoints
     public static IEndpointRouteBuilder MapMaintenanceEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/maintenance");
+        var logger = app.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("MomentFerry.Web.Api.Maintenance");
 
         group.MapGet("/", async (
             IMediaFileRepository mediaFiles,
@@ -40,6 +41,7 @@ public static class MaintenanceEndpoints
         {
             var affected = await mediaFiles.ClearMetadataStampAsync(shareId, ct);
             wakeSignal.Wake();
+            logger.LogInformation("Metadata re-index requested for {Scope}: {Affected} files will be read again", shareId?.ToString() ?? "all shares", affected);
             return Results.Ok(new { affected });
         });
 
@@ -55,6 +57,11 @@ public static class MaintenanceEndpoints
                 .ToArray();
 
             var removed = await mediaFiles.DeleteUnreferencedAsync(missing, ct);
+            logger.LogInformation(
+                "Forgot {Removed} of {Missing} index rows whose source is gone; {Kept} kept because an operation refers to them",
+                removed,
+                missing.Length,
+                missing.Length - removed);
             return Results.Ok(new
             {
                 missing = missing.Length,
@@ -77,6 +84,7 @@ public static class MaintenanceEndpoints
                 return Results.BadRequest(new { error = "Set a retention window of at least one day." });
 
             var removed = await operations.DeleteFinishedBeforeAsync(clock.UtcNow.AddDays(-days), ct);
+            logger.LogInformation("Removed {Removed} finished operations older than {Days} days", removed, days);
             return Results.Ok(new { removed, olderThanDays = days });
         });
 
@@ -88,6 +96,7 @@ public static class MaintenanceEndpoints
             command.CommandText = "VACUUM;";
             command.ExecuteNonQuery();
             var after = DatabaseBytes(connectionFactory);
+            logger.LogInformation("Database compacted from {Before} to {After} bytes", before, after);
             return Results.Ok(new { before, after, reclaimed = before is null || after is null ? null : before - after });
         });
 

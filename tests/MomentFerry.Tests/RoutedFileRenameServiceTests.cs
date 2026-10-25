@@ -426,7 +426,8 @@ public sealed class RoutedFileRenameServiceTests : IDisposable
             new RenameContextFactory(presets, cameraMappings),
             new LocalFileSystemGateway(),
             new Sha256HashService(),
-            new StubExtractor(storedFileOffsetMinutes));
+            new StubExtractor(storedFileOffsetMinutes),
+            NullLogger<RoutedFileRenameService>.Instance);
 
         return new Fixture(
             service,

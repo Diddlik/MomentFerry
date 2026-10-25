@@ -9,6 +9,8 @@ public static class TransferEndpoints
 {
     public static IEndpointRouteBuilder MapTransferEndpoints(this IEndpointRouteBuilder app)
     {
+        var logger = app.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("MomentFerry.Web.Api.Transfers");
+
         app.MapGet("/api/v1/operations", async (
             int? limit,
             IMediaOperationRepository repository,
@@ -91,7 +93,13 @@ public static class TransferEndpoints
 
             try
             {
-                return Results.Ok(await transfer.ExecuteOnceAsync(request.MediaFileId, request.EventId, ct));
+                var result = await transfer.ExecuteOnceAsync(request.MediaFileId, request.EventId, ct);
+                logger.LogInformation(
+                    "Manual transfer of {Source}: {Outcome}{Detail}",
+                    result.Result?.Operation.SourcePath ?? request.MediaFileId.ToString(),
+                    result.Result?.Operation.State.ToString() ?? "not executed",
+                    result.Message is null ? "" : $" ({result.Message})");
+                return Results.Ok(result);
             }
             catch (FileNotFoundException ex)
             {
@@ -119,7 +127,10 @@ public static class TransferEndpoints
             try
             {
                 var retry = new OperationRetryService(operations, events, shares, fileSystem, transfer, clock);
-                return Results.Ok(await retry.RetryAsync(id, ct));
+                var result = await retry.RetryAsync(id, ct);
+                logger.LogInformation("Retry of operation {Operation} for {Source}: {State}{Detail}",
+                    id, result.Operation.SourcePath, result.Operation.State, result.Message is null ? "" : $" ({result.Message})");
+                return Results.Ok(result);
             }
             catch (FileNotFoundException ex)
             {
@@ -147,7 +158,10 @@ public static class TransferEndpoints
             try
             {
                 var retry = new OperationRetryService(operations, events, shares, fileSystem, transfer, clock);
-                return Results.Ok(await retry.RouteAgainAsync(id, ct));
+                var result = await retry.RouteAgainAsync(id, ct);
+                logger.LogInformation("Route again of operation {Operation} for {Source}: {State}{Detail}",
+                    id, result.Operation.SourcePath, result.Operation.State, result.Message is null ? "" : $" ({result.Message})");
+                return Results.Ok(result);
             }
             catch (FileNotFoundException ex)
             {
