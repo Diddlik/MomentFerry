@@ -6,6 +6,12 @@ The project follows semantic versioning for tagged releases. Until v1.0, breakin
 
 ## Unreleased
 
+## [2.2.1] - 2026-10-25
+
+### Changed
+
+- dependency updates: Microsoft.Data.Sqlite and Microsoft.AspNetCore.OpenApi 10.0.12, Swashbuckle.AspNetCore.SwaggerUI 10.3.0. No behavior change.
+
 ## [2.2.0] - 2026-10-25
 
 ### Added
