@@ -65,54 +65,67 @@ The default destructive operation is **Safe Move**:
 
 If MomentFerry cannot prove the destination is safe, the source is preserved. Incomplete operations are reconciled after restart. Transfers for the same media file are serialized in-process to prevent concurrent duplicate execution.
 
-A finished operation keeps a file from being routed a second time only while the file it committed is still at the destination. If that copy is gone, the source is routed again rather than skipped for good.
+A finished operation does not by itself stop a file from being routed again. Whether a file still has to move is decided by its bytes: if the destination already holds that exact content, under any name, the event's duplicate policy applies; if the copy is gone, the source is routed again.
 
 Real filesystem copies keep a free-space reserve **in addition to the file being copied** — 512 MiB by default, adjustable under Automation & safety — whenever free capacity can be determined. If capacity cannot be determined, MomentFerry reports it as unknown rather than guessing.
 
 **Dry Run is enabled by default**, and leaving it takes an explicit confirmation token that the REST API enforces as well, not only the Web UI. **Automation is enabled by default**, so a fresh container starts scanning immediately: Dry Run is what stands between it and moving files.
 
-## Implemented
+## What's new
 
-- .NET 10 / ASP.NET Core
-- SQLite persistence with transactional versioned schema migrations
-- downgrade guard when a database is newer than the running application
-- Web UI in English, German, Russian, Polish, Italian, French and Ukrainian
-- source and destination Shares
-- Source Groups
-- capture-time Events with start/stop
-- image and video discovery
-- stable-file detection
-- ExifTool metadata extraction
-- timezone-aware capture timestamps
+- **2.2** — every process and error is logged; refused requests carry their reason and errors expand to the full stack trace in the Activity log. The routing preview runs as a background job with progress, so a reverse proxy no longer cuts it off with **504**.
+- **2.1** — 12/24-hour clock and first day of the week under **Automation & safety**, a date picker that honours both, and a **Details** dialog in the Routing preview that explains why a file does or does not match an event.
+
+Every change is listed in the [changelog](CHANGELOG.md).
+
+## Features
+
+**Routing**
+
+- source and destination shares, source groups and capture-time events with start/stop
+- image and video discovery with stable-file detection and per-share media extensions
+- ExifTool metadata extraction with timezone-aware capture timestamps
 - late-sync matching for closed events
-- routing preview and event backfill for media that is already on disk
-- *Route again* for a single file or a whole event, under the current naming rules
-- SHA-256 duplicate verification, including content the destination already holds under another name
-- filename conflict handling
-- filename templates per share, with camera-name mappings and a live preview
-- re-applying the current naming rules to files an event already stored
-- per-share media extensions and separate image/video destination subfolders
-- destination files stamped with the capture time
-- Safe Move and Copy
-- persistent operation state machine
-- restart recovery and explicit retry
+- routing preview as a background job, filterable by name and result, with a per-file **Details** analysis against any event
+- event backfill for media already on disk, and *Route again* for a single file or a whole event
+
+**Safety**
+
+- Safe Move and Copy, with SHA-256 verification before any source is released
+- duplicate detection by content, including content the destination already holds under another name
+- filename conflict handling and destination free-space reserve
+- persistent operation state machine, restart recovery and explicit retry
 - a *Needs your decision* queue for quarantined and retry-pending files
-- end-to-end Safe Move failure-path tests
-- per-media transfer serialization
-- periodic reconciliation worker
-- FileSystemWatcher wake-ups with periodic reconciliation fallback
-- persistent runtime settings
-- Dry Run / Live mode safety gate
-- automation and destination-storage status, manual scans, and an in-app activity log
+- Dry Run / Live mode gate, enforced by the API as well as the UI
+- optional username/password protection
+
+**Naming and storage**
+
+- filename templates per share, camera-name mappings and a live preview
+- re-applying the current naming rules to files an event already stored
+- separate image/video destination subfolders
+- destination files stamped with the capture time
+
+**Operation**
+
+- FileSystemWatcher wake-ups with periodic reconciliation
+- automation and storage status, manual scans and a background-task tracker
+- Activity log with expandable error details; request and process logging with an optional Debug level
 - Maintenance: re-read metadata, forget missing files, compact the database, expire finished operations
-- in-app image updates: check, one-click install, and optional automatic installation through an updater companion
+- in-app image updates: check, one-click install and optional automatic installation
+- Web UI in English, German, Russian, Polish, Italian, French and Ukrainian, with 12/24-hour clock and week-start settings
+
+**Integration**
+
 - REST API, OpenAPI JSON and a Swagger UI at `/docs`
 - Prometheus metrics at `/metrics` and operation-history CSV export
-- optional MQTT event control
-- Home Assistant REST and MQTT examples
-- Docker / Docker Compose
+- optional MQTT event control and Home Assistant examples
+- Docker / Docker Compose image on GHCR
+
+**Under the hood**
+
+- .NET 10 / ASP.NET Core and SQLite with transactional, versioned schema migrations and a downgrade guard
 - GitHub Actions build, tests and container validation
-- GHCR publishing workflow
 
 ## Quick start
 
@@ -172,7 +185,7 @@ When adding a share, use the mounted-folder browser instead of entering a contai
 3. Add the common family folder as a Destination Share.
 4. Create a Source Group containing the phone shares.
 5. Create and start an Event.
-6. Use Routing Preview and verify capture times and destination paths.
+6. Use Routing Preview and verify capture times and destination paths. **Details** on a file explains why it matches an event or not.
 7. Check the destination storage status.
 8. Only after testing, explicitly enable Live mode if Safe Move/Copy should run automatically.
 
@@ -276,4 +289,4 @@ CI validates the Release build, automated tests with coverage collection, and th
 
 ## Status
 
-Active development past v1.0. Core routing, source-deletion safety, recovery, watcher/reconciliation automation, storage protection, versioned database migrations, filename templates, maintenance tooling, Docker deployment, REST, OpenAPI, optional MQTT control and in-app image updates — including fully automatic installation — are implemented. Remaining work is tracked in the roadmap.
+Actively developed; the current release is listed on the [releases page](https://github.com/Diddlik/MomentFerry/releases). Remaining work is tracked in the [roadmap](docs/ROADMAP.md).
