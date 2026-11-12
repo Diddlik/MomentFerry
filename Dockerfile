@@ -11,7 +11,7 @@ RUN dotnet publish src/MomentFerry.Web/MomentFerry.Web.csproj \
     -p:InformationalVersion="$VERSION" \
     --output /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 
 # tzdata is installed explicitly rather than relying on the base image to carry it. Without it .NET
